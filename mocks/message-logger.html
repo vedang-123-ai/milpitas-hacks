@@ -1,17 +1,66 @@
 <!doctype html>
 <!--
-  mocks/message-logger.html — P1's test target
+  mocks/message-logger.html — P1's transport test target
   Owner: P1 (Hardware / Transport)
-  Connects to the hub WebSocket and logs every incoming Contract-1 message, so
+  Connects to the hub WebSocket and logs every incoming Contract-1 frame, so the
   firmware + hub can be verified WITHOUT the game app. Proves the pipe works.
 
-  SCAFFOLD STUB — TODO: connect to CONFIG.HUB_URL (or a hard-coded ws://), append
-  each received frame to the page; show connect/disconnect status.
+  Open via the hub:  http://localhost:8080/mocks/message-logger.html
+  Then touch a pad (or run: node hub/fake-esp32.cjs) and watch frames arrive.
 -->
 <html lang="en">
-<head><meta charset="utf-8" /><title>DotRace — Hub Message Logger</title></head>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DotRace — Hub Message Logger</title>
+  <style>
+    body { font: 15px/1.5 system-ui, sans-serif; max-width: 760px; margin: 24px auto; padding: 0 16px; }
+    h1 { font-size: 20px; }
+    .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 10px 0; }
+    input { font: inherit; padding: 7px 10px; border: 1px solid #bbb; border-radius: 8px; }
+    button { font: inherit; padding: 8px 12px; border-radius: 8px; border: 1px solid #bbb; background: #fafafa; cursor: pointer; }
+    #status { font-weight: 600; }
+    .ok { color: #178a3a; } .bad { color: #b3261e; }
+    #log { background: #0f1115; color: #b9f5c8; padding: 10px 12px; border-radius: 8px; height: 320px; overflow: auto; white-space: pre-wrap; font: 13px/1.5 ui-monospace, monospace; }
+    .count { color: #888; font-size: 13px; }
+  </style>
+</head>
 <body>
   <h1>Hub Message Logger (P1)</h1>
-  <pre id="log"></pre>
+  <div class="row">
+    <input id="url" size="28" />
+    <button id="connect">Connect</button>
+    <span id="status" class="bad">disconnected</span>
+    <span class="count">frames: <span id="count">0</span></span>
+  </div>
+  <p class="count">Expecting Contract-1 frames: <code>{ "player": 1, "dot": 4, "event": "down" }</code></p>
+  <div id="log"></div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    // default to the same host the page was served from, on the hub port
+    $('url').value = `ws://${location.hostname || 'localhost'}:${location.port || 8080}`;
+    let ws, count = 0;
+    const log = (m) => { $('log').textContent = `[${new Date().toLocaleTimeString()}] ${m}\n` + $('log').textContent; };
+    function setStatus(text, ok) { $('status').textContent = text; $('status').className = ok ? 'ok' : 'bad'; }
+
+    function connect() {
+      if (ws) try { ws.close(); } catch (_) {}
+      const url = $('url').value;
+      log(`connecting to ${url} ...`);
+      ws = new WebSocket(url);
+      ws.addEventListener('open', () => setStatus('connected', true));
+      ws.addEventListener('close', () => setStatus('disconnected', false));
+      ws.addEventListener('error', () => log('socket error'));
+      ws.addEventListener('message', (ev) => {
+        count++; $('count').textContent = count;
+        let msg; try { msg = JSON.parse(ev.data); } catch { return log(`non-JSON: ${ev.data}`); }
+        const ok = [1, 2].includes(msg.player) && msg.dot >= 1 && msg.dot <= 6 && ['down', 'up'].includes(msg.event);
+        log(`${ok ? '✓' : '✗'} P${msg.player} dot ${msg.dot} ${msg.event}`);
+      });
+    }
+    $('connect').addEventListener('click', connect);
+    connect();
+  </script>
 </body>
 </html>

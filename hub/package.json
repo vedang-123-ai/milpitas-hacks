@@ -6,7 +6,9 @@
   "type": "commonjs",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node server.test.cjs",
+    "fake-esp32": "node fake-esp32.cjs"
   },
   "dependencies": {
     "ws": "^8.18.0"
