@@ -9,6 +9,8 @@ npm-debug.log*
 # Secrets — API keys live here, never committed
 .env
 .env.*
+# ...but DO commit the template (no real key in it)
+!.env.example
 
 # OS
 .DS_Store
