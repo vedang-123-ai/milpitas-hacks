@@ -118,6 +118,30 @@
     if ($('read2')) $('read2').innerHTML = `need <b>${need}</b> · holding <b>${fmt(s.touched[2])}</b>`;
   }
 
+  // Load words.txt and split by length. medium = 2..7 letters, hard = 8+.
+  // Only A–Z words (no spaces/punctuation) survive — they have to be traceable.
+  const HARD_MIN_LEN = 8;
+  async function loadWordBank() {
+    try {
+      const text = await fetch('words.txt').then((r) => (r.ok ? r.text() : ''));
+      const seen = new Set();
+      const words = [];
+      for (const line of text.split('\n')) {
+        const w = line.trim().toUpperCase();
+        if (!w || w.startsWith('#') || !/^[A-Z]+$/.test(w) || seen.has(w)) continue;
+        seen.add(w);
+        words.push(w);
+      }
+      return {
+        total: words.length,
+        medium: words.filter((w) => w.length >= 2 && w.length < HARD_MIN_LEN),
+        hard: words.filter((w) => w.length >= HARD_MIN_LEN),
+      };
+    } catch (_) {
+      return { total: 0, medium: [], hard: [] };
+    }
+  }
+
   // Fire an engine command (used by the on-screen control buttons).
   function sendCommand(cmd) {
     unlockAudio();
@@ -135,6 +159,15 @@
     // 1. Contract 3 — load curriculum, hand to engine (engine narrates on init).
     const content = await fetch('content.json').then((r) => r.json());
     log(`[content] loaded: ${Object.keys(content.letters).length} letters`);
+
+    // 1b. Load the word list (words.txt) and bucket it by LENGTH:
+    //     medium = 2..7 letters (the bulk) · hard = 8+ letters (noticeably longer).
+    //     easy stays single random letters. Falls back to content.json words.
+    const words = await loadWordBank();
+    if (words.medium.length) content.words_medium = words.medium;
+    if (words.hard.length) content.words_hard = words.hard;
+    log(`[words] ${words.total} words — medium ${words.medium.length}, hard ${words.hard.length}`);
+
     safe('Engine.init', () => (typeof Engine !== 'undefined' ? Engine.init(content) : false));
 
     // 2. Pick input source (mock keyboard vs real hub) — identical surface.

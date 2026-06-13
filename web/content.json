@@ -14,8 +14,8 @@
   ],
   "difficulty": {
     "easy":   { "kind": "letter" },
-    "medium": { "kind": "word" },
-    "hard":   { "kind": "sentence", "wordsPerSentence": 3 }
+    "medium": { "kind": "word", "bank": "medium" },
+    "hard":   { "kind": "word", "bank": "hard" }
   },
   "prompts": {
     "find_dot_1": "Can you find the top left?",
@@ -23,7 +23,7 @@
     "find_dot_3": "Can you find the bottom left?",
     "find_dot_6": "Can you find the bottom right?",
     "trace_letter": "Touch the letter {LETTER}.",
-    "spell_word": "Spell the word {WORD}. Touch {LETTER}.",
+    "spell_word": "Spell the word {WORD}.",
     "spell_sentence": "Spell the sentence. {SENTENCE}. Start with {LETTER}.",
     "next_letter": "Touch {LETTER}.",
     "correct_word": "Correct. {WORD}.",

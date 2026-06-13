@@ -13,9 +13,12 @@
   // as {1,4,5} (superset, blocked), not as {1,4} the instant before 5 lands.
   // Long enough to cover a normal click/press pace between dots.
   const SETTLE_MS = 550;
+  const NEXT_DELAY_MS = 1300;  // pause after a word so "Correct" is fully heard first
   const evalTimers = {};       // player -> timeout id
+  let locked = false;          // true during the post-word pause (blocks re-scoring)
 
   function promptNext() {
+    locked = false;
     GameState.newTurn(GameState.nextChallenge());
     Speak.say(GameState.currentPrompt);
   }
@@ -26,21 +29,27 @@
   }
 
   function evaluate(player) {
+    if (locked) return; // mid-pause after a completed word
     // EXACT match required (held set === target set). A subset or superset fails.
     if (!GameState.hasCompleted(player)) return;
 
+    // the letter the player just finished forming (before advancing)
+    const finished = GameState.letters[GameState.letterIndex];
     const step = GameState.advanceLetter();
     if (!step.done) {
-      // more letters in this word/sentence — announce the next one
-      GameState.markResult(`Player ${player}: next letter ${step.letter}`);
-      Speak.say(GameState.format("next_letter", { LETTER: step.letter }));
+      // Confirm the letter just completed (no "touch next" instruction). The
+      // settle window before the next letter is accepted gives a natural pause.
+      GameState.markResult(`Player ${player}: letter ${finished ? finished.letter : ""} done`);
+      if (finished) Speak.say(finished.letter + ".");
       return;
     }
 
+    locked = true;
     GameState.score(player);
     GameState.markResult(`Player ${player} completed ${GameState.currentLabel}`);
     Speak.say(GameState.format("correct_word", { WORD: GameState.currentLabel }));
-    promptNext();
+    // pause before the next prompt so the "Correct" confirmation isn't cut off
+    window.setTimeout(promptNext, NEXT_DELAY_MS);
   }
 
   window.FindTargetMode = {

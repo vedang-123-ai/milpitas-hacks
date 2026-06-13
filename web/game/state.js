@@ -135,8 +135,23 @@
       }
 
       if (kind === "word") {
-        const word = randItem(this.content.words || allLetters);
+        // medium / hard read from length-bucketed banks loaded from words.txt;
+        // fall back to the seed list, then to letters, if a bank is empty.
+        const bank =
+          tier.bank === "hard" ? this.content.words_hard
+          : tier.bank === "medium" ? this.content.words_medium
+          : null;
+        const list =
+          bank && bank.length ? bank
+          : this.content.words && this.content.words.length ? this.content.words
+          : allLetters;
+        const word = randItem(list);
         const seq = this.wordToLetters(word);
+        if (!seq.length) {
+          const L = randItem(allLetters);
+          return { type: "letter", label: L, letters: [{ letter: L, dots: this.content.letters[L].slice() }],
+                   prompt: this.format("trace_letter", { LETTER: L }) };
+        }
         return {
           type: "word",
           label: word,
