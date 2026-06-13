@@ -15,10 +15,13 @@
   const SETTLE_MS = 550;
   const NEXT_DELAY_MS = 1300;  // pause after a word so "Correct" is fully heard first
   const evalTimers = {};       // player -> timeout id
+  const consumed = {};         // player -> true once the current held set has scored
   let locked = false;          // true during the post-word pause (blocks re-scoring)
 
   function promptNext() {
     locked = false;
+    consumed[1] = false;
+    consumed[2] = false;
     GameState.newTurn(GameState.nextChallenge());
     Speak.say(GameState.currentPrompt);
   }
@@ -30,17 +33,28 @@
 
   function evaluate(player) {
     if (locked) return; // mid-pause after a completed word
-    // EXACT match required (held set === target set). A subset or superset fails.
-    if (!GameState.hasCompleted(player)) return;
 
-    // the letter the player just finished forming (before advancing)
+    // EXACT match required (held set === target). A subset or superset fails.
+    const matches = GameState.hasCompleted(player);
+    if (!matches) { consumed[player] = false; return; } // re-arm when pads aren't exact
+    if (consumed[player]) return;                        // already scored this set; wait for a change
+    consumed[player] = true;
+
+    // the letter just finished (before advancing). We DON'T reset held — the
+    // player's pads stay put; the next letter scores when the held set changes
+    // to match it (a shared dot simply stays held). consumed stays true until
+    // the held set differs from the new target, so a double letter needs a
+    // deliberate release+press rather than auto-firing.
     const finished = GameState.letters[GameState.letterIndex];
     const step = GameState.advanceLetter();
     if (!step.done) {
-      // Confirm the letter just completed (no "touch next" instruction). The
-      // settle window before the next letter is accepted gives a natural pause.
       GameState.markResult(`Player ${player}: letter ${finished ? finished.letter : ""} done`);
       if (finished) Speak.say(finished.letter + ".");
+      // Re-arm for the next letter: the held pads usually no longer match the new
+      // target, so allow it to score once they do. Only stay consumed if the held
+      // set ALREADY equals the next letter (a double letter), which needs a
+      // deliberate release+press instead of auto-firing.
+      consumed[player] = GameState.hasCompleted(player);
       return;
     }
 
@@ -74,6 +88,10 @@
       } else {
         return;
       }
+
+      // Re-arm immediately when the held pads aren't the exact target (don't wait
+      // for the settle) — lets a quick release+press register a double letter.
+      if (!GameState.hasCompleted(player)) consumed[player] = false;
 
       const held = Array.from(GameState.players[player].touched).sort().join(",");
       GameState.markResult(`Player ${player} holding [${held}]`);

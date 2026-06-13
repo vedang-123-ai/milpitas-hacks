@@ -91,7 +91,10 @@
     advanceLetter() {
       this.letterIndex += 1;
       if (this.letterIndex < this.letters.length) {
-        this.resetTouches();
+        // Do NOT reset the held set here. On real hardware the player keeps pads
+        // pressed across letters (a dot shared by two letters stays down and never
+        // re-fires a "down"). Resetting would desync the software set from the
+        // physical pads and make multi-letter words impossible to finish.
         const cur = this.letters[this.letterIndex];
         this.targetDots = cur.dots.slice();
         this.lastResult = `Next letter ${cur.letter}`;
