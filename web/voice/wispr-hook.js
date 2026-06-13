@@ -4,12 +4,32 @@
  *
  * Wispr Flow is a system-level dictation app that types into the focused field
  * (cloud-only, needs internet). We expose the always-focused #voice-input and
- * parse injected text with the SAME command grammar as recognition.js.
+ * parse injected text with the SAME grammar/matcher as recognition.js, feeding
+ * matched commands through the same Voice callbacks.
  *
  * MUST NOT be a demo dependency — venue Wi-Fi/cloud can fail. Web Speech wins.
- *
- * SCAFFOLD STUB — TODO:
- *  - listen to #voice-input 'input'/'change'; parse against commands grammar
- *  - feed matched commands through the same Voice.onCommand callbacks
- *  - keep the input focused
+ * This is intentionally thin: it reuses Voice.parse + Voice._dispatch so there is
+ * zero duplicated logic. Polish (debounce/visual feedback) only if time remains.
  */
+
+(() => {
+  const input = document.getElementById('voice-input');
+  if (!input || !window.Voice) return;
+
+  function handle() {
+    const cmd = window.Voice.parse(input.value);
+    if (cmd) {
+      window.Voice._dispatch(cmd);
+      input.value = '';
+    }
+  }
+
+  // Dictation lands as an 'input' event; Enter also submits explicitly.
+  input.addEventListener('change', handle);
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') handle(); });
+
+  // Keep the field focused so dictation always has a target.
+  const refocus = () => { try { input.focus(); } catch (_) {} };
+  input.addEventListener('blur', () => setTimeout(refocus, 50));
+  refocus();
+})();

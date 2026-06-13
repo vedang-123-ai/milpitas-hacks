@@ -1,18 +1,138 @@
 <!doctype html>
 <!--
-  mocks/audio-test.html — P3's test target
-  Owner: P3 (Sensory Layer)
-  Buttons that call Audio.* / Speak.* / Voice.* DIRECTLY, so the sensory layer is
-  testable without game logic or hardware. Loads the same audio/voice modules.
+  mocks/audio-test.html — P3's test target (Sensory Layer)
+  Owner: P3. Drives Audio.* / Speak.* / Voice.* DIRECTLY, with no game logic or
+  hardware, so the whole sensory lane is verifiable on its own.
 
-  SCAFFOLD STUB — TODO: load ../web/audio/* and ../web/voice/*, render buttons:
-    playDot for all 6 dots (both players), win, buzz, say(sample), start recognition.
+  Serve from a localhost origin (mic + Web Audio need a secure context):
+    from repo root:  python3 -m http.server 8000
+    then open:       http://localhost:8000/mocks/audio-test.html   (in Chrome, with headphones)
 -->
 <html lang="en">
-<head><meta charset="utf-8" /><title>DotRace — Sensory Test Bench</title></head>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DotRace — Sensory Test Bench</title>
+  <style>
+    body { font: 15px/1.5 system-ui, sans-serif; max-width: 720px; margin: 24px auto; padding: 0 16px; color: #1a1a1a; }
+    h1 { font-size: 20px; }
+    .banner { background: #fff4d6; border: 1px solid #e6c84d; padding: 8px 12px; border-radius: 8px; }
+    fieldset { border: 1px solid #ddd; border-radius: 10px; margin: 16px 0; padding: 12px 14px; }
+    legend { font-weight: 600; padding: 0 6px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; max-width: 360px; }
+    .grid .col-head { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: #888; }
+    button { font: inherit; padding: 8px 12px; border-radius: 8px; border: 1px solid #bbb; background: #fafafa; cursor: pointer; }
+    button:hover { background: #f0f0f0; }
+    button.dot { min-width: 120px; text-align: left; }
+    .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
+    input[type=text] { font: inherit; padding: 7px 10px; border: 1px solid #bbb; border-radius: 8px; flex: 1; min-width: 200px; }
+    #log { background: #0f1115; color: #b9f5c8; padding: 10px 12px; border-radius: 8px; height: 150px; overflow: auto; white-space: pre-wrap; font: 13px/1.5 ui-monospace, monospace; }
+    .muted { color: #888; font-size: 13px; }
+  </style>
+</head>
 <body>
   <h1>Sensory Test Bench (P3)</h1>
-  <p>Headphones required — pan/pitch are inaudible on laptop speakers.</p>
-  <!-- TODO: <script src="../web/audio/earcons.js"></script> etc. + buttons -->
+  <p class="banner">🎧 <strong>Headphones required</strong> — stereo pan and pitch cues are inaudible on laptop speakers.</p>
+
+  <fieldset>
+    <legend>Audio.playDot(player, dot, isCorrect)</legend>
+    <div class="row">
+      <label><input type="radio" name="player" value="1" checked /> Player 1 (sine)</label>
+      <label><input type="radio" name="player" value="2" /> Player 2 (triangle)</label>
+      <label style="margin-left:auto"><input type="checkbox" id="correct" /> isCorrect (reward chirp)</label>
+    </div>
+    <div class="grid">
+      <div class="col-head">Left column (pans left)</div>
+      <div class="col-head">Right column (pans right)</div>
+      <button class="dot" data-dot="1">dot 1 · top-left · high</button>
+      <button class="dot" data-dot="4">dot 4 · top-right · high</button>
+      <button class="dot" data-dot="2">dot 2 · mid-left · mid</button>
+      <button class="dot" data-dot="5">dot 5 · mid-right · mid</button>
+      <button class="dot" data-dot="3">dot 3 · bot-left · low</button>
+      <button class="dot" data-dot="6">dot 6 · bot-right · low</button>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Audio.win / Audio.buzz</legend>
+    <div class="row">
+      <button data-win="1">win(1) — sting left</button>
+      <button data-win="2">win(2) — sting right</button>
+      <button data-buzz="1">buzz(1) — gentle, left</button>
+      <button data-buzz="2">buzz(2) — gentle, right</button>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Speak.say(text)</legend>
+    <div class="row">
+      <input type="text" id="say-text" value="Touch the letter C. Can you find the top right?" />
+      <button id="say-btn">Speak</button>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Voice.onCommand — say a command</legend>
+    <div class="row">
+      <button id="listen-btn">Start listening</button>
+      <span class="muted">grammar: one/two player · easy · medium · hard · rapid fire · start · repeat · quit</span>
+    </div>
+    <div class="row">
+      <span class="muted">Wispr/type test:</span>
+      <input type="text" id="voice-input" placeholder="type a command + Enter" aria-label="voice command input" />
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Log</legend>
+    <div id="log"></div>
+  </fieldset>
+
+  <!-- sensory modules under test (same order as web/index.html) -->
+  <script src="../web/audio/earcons.js"></script>
+  <script src="../web/audio/audio.js"></script>
+  <script src="../web/voice/speak.js"></script>
+  <script src="../web/voice/recognition.js"></script>
+  <script src="../web/voice/wispr-hook.js"></script>
+
+  <!-- test-bench wiring (not part of the app) -->
+  <script>
+    const logEl = document.getElementById('log');
+    const log = (m) => {
+      const t = new Date().toLocaleTimeString();
+      logEl.textContent += `[${t}] ${m}\n`;
+      logEl.scrollTop = logEl.scrollHeight;
+    };
+    const player = () => +document.querySelector('input[name=player]:checked').value;
+    const isCorrect = () => document.getElementById('correct').checked;
+
+    document.querySelectorAll('button.dot').forEach((b) =>
+      b.addEventListener('click', () => {
+        const dot = +b.dataset.dot;
+        Audio.playDot(player(), dot, isCorrect());
+        log(`playDot(${player()}, ${dot}, ${isCorrect()})`);
+      })
+    );
+    document.querySelectorAll('[data-win]').forEach((b) =>
+      b.addEventListener('click', () => { Audio.win(+b.dataset.win); log(`win(${b.dataset.win})`); })
+    );
+    document.querySelectorAll('[data-buzz]').forEach((b) =>
+      b.addEventListener('click', () => { Audio.buzz(+b.dataset.buzz); log(`buzz(${b.dataset.buzz})`); })
+    );
+
+    document.getElementById('say-btn').addEventListener('click', () => {
+      const text = document.getElementById('say-text').value;
+      Speak.say(text);
+      log(`say("${text}")`);
+    });
+
+    document.getElementById('listen-btn').addEventListener('click', () => {
+      Voice.start();
+      log('Voice.start() — grant mic if prompted, then speak a command');
+    });
+    Voice.onCommand((cmd) => log(`→ command: "${cmd}"`));
+
+    log('ready. click a dot to unlock audio (headphones on).');
+  </script>
 </body>
 </html>
