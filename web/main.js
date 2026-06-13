@@ -43,6 +43,9 @@
     // 3. Contract 1 in -> route every touch to the engine (P2).
     Source.start((msg) => {
       log(`[touch] P${msg.player} dot ${msg.dot} ${msg.event}`);
+      // Presentational flash BEFORE the engine mutates state, so the dot can be
+      // classified against the still-current target (P4 display; optional).
+      if (typeof UI !== 'undefined') UI.onTouch(msg);
       safe('Engine.handleTouch', () =>
         typeof Engine !== 'undefined'
           ? Engine.handleTouch(msg.player, msg.dot, msg.event)
@@ -55,6 +58,7 @@
       typeof Voice !== 'undefined'
         ? Voice.onCommand((cmd) => {
             log(`[command] "${cmd}"`);
+            if (typeof UI !== 'undefined') UI.onCommand(cmd);
             safe('Engine.handleCommand', () =>
               typeof Engine !== 'undefined' ? Engine.handleCommand(cmd) : false
             );

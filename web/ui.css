@@ -1,0 +1,476 @@
+/**
+ * web/ui.css — the "see the invisible game" facilitator/judge display
+ * Owner: P4 (Integration). Purely presentational; driven by ui.js reading
+ * GameState. No game logic, no contract surface. Safe to restyle freely.
+ *
+ * Aesthetic: warm, dark "tactile instrument" — embossed Braille cells on warm
+ * charcoal, two player accents (amber P1 / teal P2) mapped to the audio pan
+ * (P1 left, P2 right). Editorial serif display, refined mono for the signal log.
+ * Fonts degrade gracefully so the screen still reads well fully offline.
+ */
+
+:root {
+  /* surfaces — warm near-black, not flat grey */
+  --bg:        #15110d;
+  --bg-2:      #1b1611;
+  --surface:   #221c16;
+  --surface-2: #2a231b;
+  --line:      #3a3026;
+  --line-soft: #2e261d;
+
+  /* ink */
+  --ink:      #f3e9da;
+  --ink-mid:  #c2b3a0;
+  --ink-dim:  #8a7c6b;
+
+  /* player accents (P1 = warm amber, P2 = cool teal) */
+  --p1:       #e6a24a;
+  --p1-glow:  #ffc372;
+  --p2:       #4fc1ac;
+  --p2-glow:  #7ee8d3;
+
+  /* feedback */
+  --wrong:    #cf8377;   /* dusty rose — gentle, never harsh (matches pedagogy) */
+  --gold:     #f0c873;
+
+  --radius:   26px;
+  --ease:     cubic-bezier(0.22, 1, 0.36, 1);
+
+  --font-display: "Fraunces", "Hoefler Text", "Iowan Old Style", Georgia, "Times New Roman", serif;
+  --font-ui:      "Hanken Grotesk", ui-sans-serif, system-ui, "Segoe UI", Helvetica, sans-serif;
+  --font-mono:    "IBM Plex Mono", ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  font-family: var(--font-ui);
+  color: var(--ink);
+  background:
+    radial-gradient(120% 90% at 50% -10%, #241c14 0%, var(--bg) 55%) fixed,
+    var(--bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+/* film-grain + a soft warm bloom behind the stage, fixed so it never scrolls */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  opacity: 0.035;
+  mix-blend-mode: overlay;
+}
+body::after {
+  content: "";
+  position: fixed;
+  left: 50%;
+  top: 38%;
+  width: 90vw;
+  max-width: 1100px;
+  height: 70vh;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(closest-side, rgba(230,162,74,0.10), rgba(79,193,172,0.06) 45%, transparent 72%);
+  filter: blur(8px);
+}
+
+.shell {
+  position: relative;
+  z-index: 1;
+  width: min(1120px, 100%);
+  margin: 0 auto;
+  padding: clamp(20px, 3.4vw, 44px) clamp(18px, 4vw, 40px) 40px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(22px, 3.5vw, 42px);
+}
+
+/* ── header ─────────────────────────────────────────────────────────────── */
+.masthead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--line-soft);
+  padding-bottom: 18px;
+  animation: rise 0.7s var(--ease) both;
+}
+.wordmark {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+}
+.wordmark h1 {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-weight: 600;
+  font-size: clamp(30px, 4.6vw, 50px);
+  letter-spacing: -0.02em;
+  line-height: 0.9;
+  margin: 0;
+}
+.wordmark h1 .dot-i {
+  color: var(--p1);
+  font-style: italic;
+}
+.wordmark .tag {
+  font-size: 12px;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  white-space: nowrap;
+}
+
+.pills { display: flex; gap: 10px; flex-wrap: wrap; }
+.pill {
+  font-size: 12.5px;
+  letter-spacing: 0.06em;
+  padding: 8px 15px;
+  border-radius: 100px;
+  border: 1px solid var(--line);
+  background: linear-gradient(var(--surface), var(--bg-2));
+  color: var(--ink-mid);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  transition: color 0.4s, border-color 0.4s;
+}
+.pill b { color: var(--ink); font-weight: 600; letter-spacing: 0.01em; }
+.pill .key { color: var(--ink-dim); text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.18em; }
+.pill.timer { color: var(--gold); border-color: rgba(240,200,115,0.4); }
+.pill.timer b { color: var(--gold); }
+
+/* ── prompt (the audible narration, made visible) ───────────────────────── */
+.prompt-block {
+  text-align: center;
+  animation: rise 0.7s 0.06s var(--ease) both;
+}
+.prompt-eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  margin-bottom: 12px;
+}
+#prompt {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-weight: 400;
+  font-size: clamp(26px, 4.4vw, 46px);
+  line-height: 1.12;
+  letter-spacing: -0.015em;
+  margin: 0 auto;
+  max-width: 18ch;
+  color: var(--ink);
+  text-wrap: balance;
+}
+#prompt.enter { animation: prompt-in 0.5s var(--ease) both; }
+.target-chip {
+  margin-top: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+.target-chip .glyph {
+  font-family: var(--font-display);
+  font-size: 17px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--p1);
+}
+
+/* ── stage: the two Braille cells ───────────────────────────────────────── */
+.stage {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(20px, 4vw, 56px);
+  align-items: stretch;
+  justify-items: center;
+}
+
+.cell {
+  --accent: var(--p1);
+  --accent-glow: var(--p1-glow);
+  position: relative;
+  width: 100%;
+  max-width: 360px;
+  padding: clamp(20px, 2.6vw, 30px);
+  border-radius: var(--radius);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.035), transparent 26%),
+    linear-gradient(160deg, var(--surface), var(--bg-2));
+  border: 1px solid var(--line);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.05),
+    0 24px 50px -28px rgba(0,0,0,0.85);
+  animation: cell-in 0.7s 0.14s var(--ease) both;
+  transition: opacity 0.5s, filter 0.5s, transform 0.5s;
+}
+.cell[data-player="2"] {
+  --accent: var(--p2);
+  --accent-glow: var(--p2-glow);
+  animation-delay: 0.2s;
+}
+.cell.inactive { opacity: 0.34; filter: grayscale(0.5) saturate(0.5); }
+
+/* a small notch marking the cell "top" — echoes the physical orientation bump */
+.cell .notch {
+  position: absolute;
+  top: -1px; left: 50%;
+  width: 34px; height: 6px;
+  transform: translateX(-50%);
+  border-radius: 0 0 6px 6px;
+  background: var(--accent);
+  opacity: 0.5;
+}
+
+.cell-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: clamp(16px, 2vw, 24px);
+}
+.cell-head .who {
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-mid);
+}
+.cell-head .who::before {
+  content: "";
+  display: inline-block;
+  width: 8px; height: 8px;
+  margin-right: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 12px var(--accent-glow);
+  vertical-align: middle;
+}
+.score {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-size: clamp(34px, 5vw, 50px);
+  font-weight: 600;
+  line-height: 0.8;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.score.bump { animation: bump 0.4s var(--ease); }
+
+/* the 3×2 dot grid: cols = L/R, rows = top/mid/bottom (Braille numbering) */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: clamp(14px, 2.2vw, 26px);
+  justify-items: center;
+  padding: clamp(6px, 1vw, 12px) clamp(14px, 3vw, 34px);
+}
+
+.dot {
+  position: relative;
+  width: clamp(50px, 7.2vw, 74px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  /* default: a debossed, dim well in the slate */
+  background:
+    radial-gradient(60% 60% at 50% 38%, #0d0a07, #14100b 70%);
+  border: 1px solid var(--line-soft);
+  box-shadow:
+    inset 0 3px 7px rgba(0,0,0,0.7),
+    inset 0 -1px 0 rgba(255,255,255,0.03);
+  color: var(--ink-dim);
+  transition: transform 0.18s var(--ease), box-shadow 0.35s, background 0.35s, border-color 0.35s;
+}
+.dot .num {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  opacity: 0.4;
+  transition: opacity 0.3s, color 0.3s;
+  user-select: none;
+}
+
+/* target: a quiet breathing ring so judges see what's being asked */
+.dot.target {
+  border-color: color-mix(in oklab, var(--accent) 55%, var(--line));
+  animation: target-pulse 2.4s ease-in-out infinite;
+}
+.dot.target .num { opacity: 0.7; color: var(--ink-mid); }
+
+/* lit: the pad is "down" / found — glows in the player's color */
+.dot.lit {
+  background:
+    radial-gradient(58% 58% at 50% 40%, var(--accent-glow), var(--accent) 72%);
+  border-color: var(--accent-glow);
+  box-shadow:
+    0 0 0 1px var(--accent),
+    0 0 26px -2px var(--accent-glow),
+    inset 0 2px 6px rgba(255,255,255,0.4);
+  transform: translateY(-1px);
+  animation: none;
+}
+.dot.lit .num { opacity: 0.9; color: #1a130b; }
+
+/* transient touch feedback (fired by ui.js on each "down") */
+.dot.flash-correct { animation: flash-correct 0.55s var(--ease); }
+.dot.flash-wrong   { animation: flash-wrong 0.5s ease; }
+
+.cell.win { animation: cell-win 0.9s var(--ease); }
+
+/* ── status ticker ──────────────────────────────────────────────────────── */
+.ticker {
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  letter-spacing: 0.04em;
+  color: var(--ink-dim);
+  min-height: 1.2em;
+  transition: color 0.3s;
+}
+.ticker b { color: var(--ink-mid); font-weight: 500; }
+
+/* ── footer: command bar + signal log ───────────────────────────────────── */
+.console {
+  margin-top: auto;
+  display: grid;
+  gap: 16px;
+  animation: rise 0.7s 0.22s var(--ease) both;
+}
+.cmdbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 6px 6px 6px 18px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: linear-gradient(var(--surface), var(--bg-2));
+}
+.cmdbar .lead {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  white-space: nowrap;
+}
+.cmdbar .mic {
+  position: relative;
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: var(--p2);
+  box-shadow: 0 0 0 0 rgba(79,193,172,0.5);
+  animation: listen 2.6s ease-out infinite;
+}
+#voice-input {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  padding: 12px 8px;
+  outline: none;
+}
+#voice-input::placeholder { color: var(--ink-dim); }
+.cmdbar.flash { animation: cmd-flash 0.5s var(--ease); }
+
+.logwrap {
+  border: 1px solid var(--line-soft);
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--bg-2);
+}
+.logwrap summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 11px 16px;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.logwrap summary::-webkit-details-marker { display: none; }
+.logwrap summary .chev { transition: transform 0.3s; }
+.logwrap[open] summary .chev { transform: rotate(90deg); }
+#log {
+  margin: 0;
+  padding: 4px 16px 16px;
+  max-height: 168px;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: #8fae93;            /* soft phosphor green, low key */
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── keyframes ──────────────────────────────────────────────────────────── */
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes cell-in { from { opacity: 0; transform: translateY(20px) scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes prompt-in { from { opacity: 0; transform: translateY(10px); filter: blur(3px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes bump { 0% { transform: none; } 35% { transform: translateY(-6px) scale(1.14); } 100% { transform: none; } }
+@keyframes target-pulse {
+  0%, 100% { box-shadow: inset 0 3px 7px rgba(0,0,0,0.7), 0 0 0 0 transparent; }
+  50%      { box-shadow: inset 0 3px 7px rgba(0,0,0,0.7), 0 0 16px -2px var(--accent-glow); }
+}
+@keyframes flash-correct {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.16); box-shadow: 0 0 34px 2px var(--accent-glow), inset 0 2px 6px rgba(255,255,255,0.5); }
+  100% { transform: scale(1); }
+}
+@keyframes flash-wrong {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); background: radial-gradient(58% 58% at 50% 40%, var(--wrong), #5c3530 75%); border-color: var(--wrong); }
+  60% { transform: translateX(3px); }
+}
+@keyframes cell-win {
+  0%   { box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 24px 50px -28px rgba(0,0,0,0.85); }
+  30%  { box-shadow: 0 0 0 1px var(--accent), 0 0 60px -6px var(--accent-glow), 0 24px 50px -28px rgba(0,0,0,0.85); transform: translateY(-3px); }
+  100% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 24px 50px -28px rgba(0,0,0,0.85); }
+}
+@keyframes cmd-flash {
+  0% { border-color: var(--line); }
+  30% { border-color: var(--p2); box-shadow: 0 0 22px -6px var(--p2-glow); }
+  100% { border-color: var(--line); }
+}
+@keyframes listen {
+  0%   { box-shadow: 0 0 0 0 rgba(79,193,172,0.5); }
+  70%  { box-shadow: 0 0 0 8px rgba(79,193,172,0); }
+  100% { box-shadow: 0 0 0 0 rgba(79,193,172,0); }
+}
+
+/* ── responsive ─────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .stage { grid-template-columns: 1fr; gap: 22px; }
+  .cell { max-width: 420px; }
+  .masthead { align-items: flex-start; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
