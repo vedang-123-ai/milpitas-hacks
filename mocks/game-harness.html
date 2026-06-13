@@ -2,17 +2,569 @@
 <!--
   mocks/game-harness.html — P2's test target
   Owner: P2 (Game Logic)
-  Runs the game engine with the keyboard emitter and STUBBED Audio/Speak/Voice
-  (logged to screen instead of sounded), so game rules are testable without the
-  real sensory layer or hardware. The fastest inner loop for P2.
-
-  SCAFFOLD STUB — TODO: define stub globals Audio/Speak/Voice that log calls,
-  load web/game/* + content.json + keyboard-emitter, drive find-target by keys.
+  Runs the game engine with stubbed Audio/Speak/Voice, so game rules are testable
+  without the real sensory layer, integration layer, or hardware.
 -->
 <html lang="en">
-<head><meta charset="utf-8" /><title>DotRace — Game Logic Harness</title></head>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DotRace — Braille Letter Harness</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7fb;
+      --panel: #ffffff;
+      --ink: #172033;
+      --muted: #697386;
+      --line: #dde3ee;
+      --blue: #2563eb;
+      --green: #0f9f6e;
+      --red: #dc3545;
+      --gold: #d97706;
+      --shadow: 0 18px 40px rgba(23, 32, 51, 0.10);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        linear-gradient(135deg, rgba(37, 99, 235, 0.10), transparent 34%),
+        linear-gradient(225deg, rgba(15, 159, 110, 0.10), transparent 30%),
+        var(--bg);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.5;
+    }
+
+    main {
+      width: min(1180px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 34px 0 40px;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: end;
+      margin-bottom: 22px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(2rem, 4vw, 4.25rem);
+      line-height: 0.95;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      margin: 10px 0 0;
+      color: var(--muted);
+      max-width: 680px;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 38px;
+      padding: 8px 13px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.78);
+      color: var(--muted);
+      font-size: 0.92rem;
+      white-space: nowrap;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(360px, 0.85fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .panel {
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+
+    .panel-body { padding: 18px; }
+
+    .top-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .metric {
+      min-height: 104px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+
+    .metric span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .metric strong {
+      display: block;
+      margin-top: 8px;
+      font-size: 1.38rem;
+      line-height: 1.1;
+    }
+
+    .prompt {
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #101827;
+      color: #ffffff;
+      margin-bottom: 18px;
+    }
+
+    .prompt span {
+      display: block;
+      color: #aab7cf;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .prompt strong {
+      display: block;
+      margin-top: 8px;
+      font-size: clamp(1.45rem, 3vw, 2.65rem);
+      line-height: 1.05;
+      letter-spacing: 0;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    .control-group h2,
+    .board h2,
+    .log-panel h2 {
+      margin: 0 0 10px;
+      font-size: 0.82rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .button-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    button {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--ink);
+      min-height: 40px;
+      padding: 9px 12px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+    }
+
+    button:hover {
+      border-color: #9eb3d9;
+      transform: translateY(-1px);
+    }
+
+    button.active {
+      background: var(--blue);
+      border-color: var(--blue);
+      color: #ffffff;
+    }
+
+    button.danger { color: var(--red); }
+
+    .boards {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .board {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      background: var(--panel);
+    }
+
+    .dot-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: repeat(3, 74px);
+      gap: 10px;
+    }
+
+    .dot {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      min-width: 0;
+      min-height: 0;
+      border: 2px solid var(--line);
+      background: #f9fbff;
+      text-align: center;
+    }
+
+    .dot-num {
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+
+    .dot-place {
+      font-size: 0.98rem;
+      line-height: 1.1;
+    }
+
+    .dot.target {
+      border-color: var(--gold);
+      background: #fff7e8;
+    }
+
+    .dot.touched {
+      border-color: var(--green);
+      background: #e9fbf4;
+      color: #075f46;
+    }
+
+    .keys {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .letter-bank {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 14px 0 0;
+    }
+
+    .log-panel {
+      position: sticky;
+      top: 18px;
+    }
+
+    .log-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      padding: 16px 16px 0;
+    }
+
+    pre {
+      margin: 0;
+      min-height: 620px;
+      max-height: 620px;
+      overflow: auto;
+      padding: 16px;
+      background: transparent;
+      color: #253047;
+      white-space: pre-wrap;
+      font: 0.92rem/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    @media (max-width: 920px) {
+      header,
+      .layout,
+      .controls,
+      .boards,
+      .top-grid {
+        grid-template-columns: 1fr;
+      }
+
+      header {
+        align-items: start;
+        flex-direction: column;
+      }
+
+      .log-panel { position: static; }
+      pre { min-height: 360px; max-height: 420px; }
+    }
+  </style>
+</head>
 <body>
-  <h1>Game Logic Harness (P2)</h1>
-  <pre id="log"></pre>
+  <main>
+    <header>
+      <div>
+        <h1>Braille Letter Harness</h1>
+        <p class="subtitle">P2 test dashboard for tracing Braille letters. The board sends dot positions, but the game target is the letter pattern.</p>
+      </div>
+      <div class="status-pill" id="ready-state">Loading content...</div>
+    </header>
+
+    <section class="layout" aria-label="game logic harness">
+      <div>
+        <section class="top-grid" aria-label="game state">
+          <div class="metric"><span>Mode</span><strong id="mode">-</strong></div>
+          <div class="metric"><span>Difficulty</span><strong id="difficulty">-</strong></div>
+          <div class="metric"><span>Target</span><strong id="target">-</strong></div>
+          <div class="metric"><span>Score</span><strong id="score">0 - 0</strong></div>
+          <div class="metric"><span>Last result</span><strong id="last-result">Ready</strong></div>
+        </section>
+
+        <section class="prompt" aria-label="current prompt">
+          <span>Current prompt</span>
+          <strong id="prompt">Waiting for content...</strong>
+        </section>
+
+        <section class="panel">
+          <div class="panel-body">
+            <div class="controls">
+              <div class="control-group">
+                <h2>Modes</h2>
+                <div class="button-row">
+                  <button data-mode="find-target">Find target</button>
+                  <button data-mode="race">Race</button>
+                  <button data-mode="rapid-fire">Rapid fire</button>
+                  <button data-mode="free-explore">Free explore</button>
+                </div>
+              </div>
+              <div class="control-group">
+                <h2>Letters</h2>
+                <div class="button-row">
+                  <button data-command="easy">Easy</button>
+                  <button data-command="medium">Medium</button>
+                  <button data-command="hard">Hard</button>
+                  <button data-command="repeat">Repeat</button>
+                </div>
+                <div class="letter-bank" id="letter-bank" aria-label="letter shortcuts"></div>
+              </div>
+            </div>
+
+            <section class="boards" aria-label="player touch boards">
+              <div class="board">
+                <h2>Player 1</h2>
+                <div class="dot-grid" data-player="1"></div>
+                <div class="keys">Keyboard board pads: 1 2 3 4 5 6</div>
+              </div>
+              <div class="board">
+                <h2>Player 2</h2>
+                <div class="dot-grid" data-player="2"></div>
+                <div class="keys">Keyboard board pads: Q W E R T Y</div>
+              </div>
+            </section>
+          </div>
+        </section>
+      </div>
+
+      <section class="panel log-panel">
+        <div class="log-header">
+          <h2>Event log</h2>
+          <button class="danger" id="clear-log">Clear</button>
+        </div>
+        <pre id="log"></pre>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    const logEl = document.getElementById("log");
+    const fields = {
+      ready: document.getElementById("ready-state"),
+      mode: document.getElementById("mode"),
+      difficulty: document.getElementById("difficulty"),
+      target: document.getElementById("target"),
+      score: document.getElementById("score"),
+      prompt: document.getElementById("prompt"),
+      lastResult: document.getElementById("last-result"),
+    };
+
+    function log(line) {
+      const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      logEl.textContent += `[${time}] ${line}\n`;
+      logEl.scrollTop = logEl.scrollHeight;
+      render();
+    }
+
+    window.CONFIG = { WIN_SCORE: 3, RAPID_FIRE_SEC: 30 };
+    window.Audio = {
+      playDot: (player, dot, isCorrect) => log(`Audio.playDot player=${player} dot=${dot} correct=${isCorrect}`),
+      win: (player) => log(`Audio.win player=${player}`),
+      buzz: (player) => log(`Audio.buzz player=${player}`),
+    };
+    window.Speak = { say: (text) => log(`Speak.say "${text}"`) };
+    window.Voice = { onCommand: () => {} };
+  </script>
+  <script src="../web/game/state.js"></script>
+  <script src="../web/game/modes/free-explore.js"></script>
+  <script src="../web/game/modes/find-target.js"></script>
+  <script src="../web/game/modes/race.js"></script>
+  <script src="../web/game/modes/rapid-fire.js"></script>
+  <script src="../web/game/engine.js"></script>
+  <script>
+    const keyMap = {
+      "1": [1, 1], "2": [1, 2], "3": [1, 3],
+      "4": [1, 4], "5": [1, 5], "6": [1, 6],
+      q: [2, 1], w: [2, 2], e: [2, 3],
+      r: [2, 4], t: [2, 5], y: [2, 6],
+    };
+    let contentData = null;
+
+    const dotPlaces = {
+      1: "top left",
+      2: "middle left",
+      3: "bottom left",
+      4: "top right",
+      5: "middle right",
+      6: "bottom right",
+    };
+
+    function dotOrder() {
+      return [1, 4, 2, 5, 3, 6];
+    }
+
+    function buildBoards() {
+      document.querySelectorAll(".dot-grid").forEach((grid) => {
+        const player = Number(grid.dataset.player);
+        grid.innerHTML = "";
+        dotOrder().forEach((dot) => {
+          const button = document.createElement("button");
+          button.className = "dot";
+          button.type = "button";
+          button.dataset.player = player;
+          button.dataset.dot = dot;
+          button.innerHTML = `<span class="dot-num">Dot ${dot}</span><span class="dot-place">${dotPlaces[dot]}</span>`;
+          button.addEventListener("click", () => sendTouch(player, dot));
+          grid.appendChild(button);
+        });
+      });
+    }
+
+    function buildLetterBank(content) {
+      const bank = document.getElementById("letter-bank");
+      bank.innerHTML = "";
+      Object.keys(content.letters).forEach((letter) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = letter;
+        button.title = `${letter}: dots ${content.letters[letter].join(", ")}`;
+        button.addEventListener("click", () => sendLetter(1, letter));
+        bank.appendChild(button);
+      });
+    }
+
+    function sendTouch(player, dot) {
+      const down = { player, dot, event: "down" };
+      const up = { player, dot, event: "up" };
+      log(`ESP32 message ${JSON.stringify(down)}`);
+      Engine.handleMessage(down);
+      Engine.handleMessage(up);
+      render();
+    }
+
+    function sendLetter(player, letter) {
+      if (!contentData || !contentData.letters[letter]) return;
+      log(`trace letter ${letter} as player=${player}`);
+      contentData.letters[letter].forEach((dot) => {
+        Engine.handleTouch(player, dot, "down");
+        Engine.handleTouch(player, dot, "up");
+      });
+      render();
+    }
+
+    function labelMode(mode) {
+      return mode.split("-").map((part) => part[0].toUpperCase() + part.slice(1)).join(" ");
+    }
+
+    function render() {
+      if (!window.GameState || !GameState.content) return;
+      const snap = GameState.snapshot();
+      fields.ready.textContent = "Harness ready";
+      fields.mode.textContent = labelMode(snap.mode);
+      fields.difficulty.textContent = snap.difficulty[0].toUpperCase() + snap.difficulty.slice(1);
+      fields.target.textContent = snap.type === "letter" ? snap.label : "Position";
+      fields.score.textContent = `${snap.scores[1]} - ${snap.scores[2]}`;
+      fields.prompt.textContent = snap.prompt || "No active prompt";
+      fields.lastResult.textContent = snap.lastResult;
+
+      document.querySelectorAll("[data-mode]").forEach((button) => {
+        button.classList.toggle("active", button.dataset.mode === snap.mode);
+      });
+
+      document.querySelectorAll("[data-command]").forEach((button) => {
+        button.classList.toggle("active", button.dataset.command === snap.difficulty);
+      });
+
+      document.querySelectorAll(".dot").forEach((button) => {
+        const player = Number(button.dataset.player);
+        const dot = Number(button.dataset.dot);
+        button.classList.toggle("target", snap.targetDots.includes(dot));
+        button.classList.toggle("touched", snap.touched[player].includes(dot));
+      });
+    }
+
+    buildBoards();
+
+    fetch("../web/content.json")
+      .then((response) => response.json())
+      .then((content) => {
+        contentData = content;
+        buildLetterBank(content);
+        Engine.init(content);
+        log("Harness ready. Easy mode cycles through starter Braille letters.");
+        render();
+      });
+
+    window.addEventListener("keydown", (event) => {
+      if (event.repeat) return;
+      const mapped = keyMap[event.key.toLowerCase()];
+      const letter = event.key.toUpperCase();
+      if (!mapped && (!contentData || !contentData.letters[letter])) return;
+      event.preventDefault();
+      if (mapped) sendTouch(mapped[0], mapped[1]);
+      else sendLetter(1, letter);
+    });
+
+    document.querySelectorAll("[data-mode]").forEach((button) => {
+      button.addEventListener("click", () => {
+        Engine.setMode(button.dataset.mode);
+        log(`mode ${button.dataset.mode}`);
+      });
+    });
+
+    document.querySelectorAll("[data-command]").forEach((button) => {
+      button.addEventListener("click", () => {
+        Engine.handleCommand(button.dataset.command);
+        log(`command ${button.dataset.command}`);
+      });
+    });
+
+    document.getElementById("clear-log").addEventListener("click", () => {
+      logEl.textContent = "";
+      render();
+    });
+
+    window.setInterval(render, 1000);
+  </script>
 </body>
 </html>

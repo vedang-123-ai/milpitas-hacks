@@ -1,13 +1,60 @@
 /**
  * web/game/modes/race.js — Mode 3: 1v1 Race (HEADLINE demo mode)
  * Owner: P2 (Game Logic)
- *
- * One prompt to both players; both cells live. A player scores when they've
- * touched the COMPLETE correct dot-set. Wrong dot -> buzz + no score, but the
- * turn does NOT end. First to complete wins the point + panned win sting; TTS
- * announces score; first to N points wins.
- *
- * SCAFFOLD STUB — TODO expose: { enter(), onTouch(player,dot,event), onCommand(cmd) }
- *  - track each player's touchedDots vs targetDots
- *  - award on full-set match -> Audio.win(player), Speak.say(score), next round
  */
+(function () {
+  function winScore() {
+    return (window.CONFIG && CONFIG.WIN_SCORE) || 3;
+  }
+
+  function promptNext() {
+    GameState.newTurn(GameState.nextChallenge());
+    Speak.say(GameState.currentPrompt);
+  }
+
+  window.RaceMode = {
+    enter() {
+      GameState.setMode("race");
+      GameState.setActivePlayers(2);
+      promptNext();
+    },
+
+    onTouch(player, dot, event) {
+      if (event !== "down") return;
+      if (player > GameState.activePlayers) return;
+
+      if (!GameState.targetDots.includes(dot)) {
+        GameState.markResult(`Player ${player} touched wrong dot ${dot}`);
+        Audio.buzz(player);
+        return;
+      }
+
+      if (GameState.hasTouched(player, dot)) {
+        GameState.markResult(`Player ${player} already found dot ${dot}`);
+        return;
+      }
+
+      GameState.addTouch(player, dot);
+      Audio.playDot(player, dot, true);
+
+      if (!GameState.hasCompleted(player)) return;
+
+      GameState.score(player);
+      GameState.markResult(`Player ${player} won the point`);
+      Audio.win(player);
+      Speak.say(GameState.scoreText(player));
+
+      if (GameState.players[player].score >= winScore()) {
+        Speak.say(`Player ${player} wins the race.`);
+        GameState.resetScores();
+      }
+
+      promptNext();
+    },
+
+    onCommand(command) {
+      if (command === "repeat") Speak.say(GameState.currentPrompt);
+      if (command === "start") promptNext();
+    },
+  };
+})();
