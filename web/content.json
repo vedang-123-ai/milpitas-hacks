@@ -17,6 +17,11 @@
     "medium": { "kind": "word", "bank": "medium" },
     "hard":   { "kind": "word", "bank": "hard" }
   },
+  "race": {
+    "questions": { "easy": 5, "medium": 4, "hard": 3 },
+    "minQuestions": 1,
+    "maxQuestions": 15
+  },
   "prompts": {
     "find_dot_1": "Can you find the top left?",
     "find_dot_4": "Can you find the top right?",
@@ -28,7 +33,16 @@
     "next_letter": "Touch {LETTER}.",
     "correct_word": "Correct. {WORD}.",
     "win": "Player {PLAYER} wins the point. The score is {S1} to {S2}.",
+    "race_intro": "Race! Best of {TOTAL}. {DIFFICULTY} mode. Player one versus player two.",
+    "race_letter": "Question {N} of {TOTAL}. Touch {LETTER}.",
+    "race_word": "Question {N} of {TOTAL}. Spell {WORD}.",
+    "race_sudden_letter": "Sudden death! Touch {LETTER}.",
+    "race_sudden_word": "Sudden death! Spell {WORD}.",
+    "race_point": "Player {PLAYER} takes it. {S1} to {S2}.",
+    "race_tie": "Tied {S1} to {S2}. Sudden death!",
+    "race_win": "Player {WINNER} wins the race, {S1} to {S2}!",
+    "race_questions_set": "Best of {TOTAL}. Say race to begin.",
     "menu": "Main menu. Say one player, or two player. Say easy, medium, or hard to change level."
   },
-  "commands": ["one player","two player","easy","medium","hard","rapid fire","start","repeat","quit"]
+  "commands": ["one player","two player","race","easy","medium","hard","rapid fire","start","repeat","quit","three words","four words","five words","six words","seven words","eight words","nine words","ten words"]
 }

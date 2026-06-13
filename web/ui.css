@@ -200,6 +200,21 @@ body::after {
 }
 .cell.p2 { --accent: var(--p2); --accent-glow: var(--p2-glow); animation-delay: 0.2s; }
 
+/* victory glow on the winning cell at the end of a race */
+.cell.winner {
+  border-color: var(--accent-glow);
+  box-shadow:
+    0 0 0 2px var(--accent),
+    0 0 70px -12px var(--accent-glow),
+    inset 0 1px 0 rgba(255,255,255,0.06),
+    0 24px 50px -28px rgba(0,0,0,0.85);
+  animation: winner-pulse 1.3s var(--ease) infinite;
+}
+@keyframes winner-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px var(--accent), 0 0 50px -16px var(--accent-glow), 0 24px 50px -28px rgba(0,0,0,0.85); }
+  50%      { box-shadow: 0 0 0 2px var(--accent), 0 0 80px -8px var(--accent-glow), 0 24px 50px -28px rgba(0,0,0,0.85); }
+}
+
 .cell .notch {
   position: absolute; top: -1px; left: 50%;
   width: 34px; height: 6px; transform: translateX(-50%);

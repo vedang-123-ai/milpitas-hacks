@@ -7,8 +7,10 @@
 
   function makePlayers() {
     return {
-      1: { touched: new Set(), score: 0 },
-      2: { touched: new Set(), score: 0 },
+      // `pos` is each player's INDEPENDENT position in the current race word
+      // (which letter of the word they're tracing). Unused outside race mode.
+      1: { touched: new Set(), score: 0, pos: 0 },
+      2: { touched: new Set(), score: 0, pos: 0 },
     };
   }
 
@@ -39,6 +41,12 @@
     round: 0,
     lastResult: "Ready",
 
+    // 1v1 race match state. `active` while a race is in progress, `over` once a
+    // winner is declared. `asked` counts questions shown; once asked >= total and
+    // scores differ the match ends (a tie triggers sudden-death questions).
+    race: { active: false, total: 0, asked: 0, over: false, winner: 0, sudden: false },
+    raceQuestionsOverride: null, // voice-set "best of N"; null = use difficulty default
+
     init(content) {
       this.content = content;
       this.resetScores();
@@ -56,6 +64,9 @@
     setMode(mode) {
       this.mode = mode;
       this.resetTouches();
+      // Leaving race mode tears down any in-flight match so a stale race banner
+      // or pending question can't bleed into another mode.
+      if (mode !== "race") this.race.active = false;
     },
 
     setDifficulty(difficulty) {
@@ -177,6 +188,135 @@
       };
     },
 
+    // ── 1v1 RACE ────────────────────────────────────────────────────────────
+    // A race is a fixed number of questions; each question is one letter (easy)
+    // or one word (medium/hard, spelled letter-by-letter). Both players race the
+    // SAME question on their own cells and progress INDEPENDENTLY (players[p].pos),
+    // so the first to finish the whole word takes the point. After the set number
+    // of questions the higher score wins; a tie forces sudden-death questions.
+
+    // How many questions this race runs: a voice override wins, else the
+    // per-difficulty default from content.json, else the CONFIG fallback.
+    raceQuestionCount() {
+      const fallback = (window.CONFIG && window.CONFIG.RACE_QUESTIONS) || 5;
+      const byDiff = this.content && this.content.race && this.content.race.questions;
+      const base = this.raceQuestionsOverride
+        || (byDiff && byDiff[this.difficulty])
+        || fallback;
+      return this.clampQuestions(base);
+    },
+
+    clampQuestions(n) {
+      const cfg = (this.content && this.content.race) || {};
+      const min = cfg.minQuestions || 1;
+      const max = cfg.maxQuestions || 15;
+      n = Math.round(Number(n) || 0);
+      return Math.max(min, Math.min(max, n));
+    },
+
+    // Voice-configurable "best of N". Returns the clamped value actually stored.
+    setRaceQuestions(n) {
+      this.raceQuestionsOverride = this.clampQuestions(n);
+      return this.raceQuestionsOverride;
+    },
+
+    // Begin a fresh match: zero scores, no question loaded yet (the mode narrates
+    // an intro first, then calls loadRaceQuestion for question 1).
+    startRace() {
+      this.resetScores();
+      this.resetTouches();
+      this.players[1].pos = 0;
+      this.players[2].pos = 0;
+      this.letters = [];
+      this.targetDots = [];
+      this.race = {
+        active: true,
+        total: this.raceQuestionCount(),
+        asked: 0,
+        over: false,
+        winner: 0,
+        sudden: false,
+      };
+    },
+
+    // Like a race-flavoured nextChallenge, but ALWAYS a single letter or single
+    // word (never a sentence) so both players share one tracable target.
+    nextRaceChallenge() {
+      const allLetters = Object.keys(this.content.letters);
+      const tier = (this.content.difficulty && this.content.difficulty[this.difficulty]) || { kind: "letter" };
+      const asLetter = () => {
+        const L = randItem(allLetters);
+        return { type: "letter", label: L, letters: [{ letter: L, dots: this.content.letters[L].slice() }] };
+      };
+
+      if ((tier.kind || "letter") !== "word") return asLetter();
+
+      const bank =
+        tier.bank === "hard" ? this.content.words_hard
+        : tier.bank === "medium" ? this.content.words_medium
+        : null;
+      const list =
+        bank && bank.length ? bank
+        : this.content.words && this.content.words.length ? this.content.words
+        : null;
+      if (!list) return asLetter();
+
+      const word = randItem(list);
+      const seq = this.wordToLetters(word);
+      if (!seq.length) return asLetter();
+      return { type: "word", label: word, letters: seq };
+    },
+
+    // Load the next race question. Increments `asked`, resets both players to the
+    // start of the new word. The mode sets currentPrompt (it wants the spoken
+    // question number); we just stage the target data here.
+    loadRaceQuestion(challenge) {
+      this.race.asked += 1;
+      this.round += 1;
+      this.letters = challenge.letters || [];
+      this.players[1].pos = 0;
+      this.players[2].pos = 0;
+      this.resetTouches();
+      this.currentLabel = challenge.label;
+      this.currentType = challenge.type;
+      this.targetDots = this.letters.length ? this.letters[0].dots.slice() : [];
+      this.lastResult = `Question ${this.race.asked} of ${this.race.total}`;
+    },
+
+    // The dots a given player needs RIGHT NOW: the letter at their own position
+    // in the race word (race mode), else the shared target (other modes).
+    targetDotsFor(player) {
+      if (!this.race.active) return this.targetDots.slice();
+      const seq = this.letters;
+      const p = this.players[player];
+      if (!seq || !seq.length || !p || p.pos >= seq.length) return [];
+      return seq[p.pos].dots.slice();
+    },
+
+    // Has this player's held set EXACTLY matched their current letter?
+    letterCompleteFor(player) {
+      const target = this.targetDotsFor(player);
+      const p = this.players[player];
+      return Boolean(target.length && p && sameSet(p.touched, target));
+    },
+
+    // Move a player to the next letter of the race word. Returns { wordDone:true }
+    // when they've just finished the final letter (i.e. won the question).
+    advanceRacePlayer(player) {
+      const p = this.players[player];
+      if (!p) return { wordDone: true };
+      p.pos += 1;
+      if (p.pos < this.letters.length) {
+        return { wordDone: false, letter: this.letters[p.pos].letter };
+      }
+      return { wordDone: true };
+    },
+
+    raceFinish(winner) {
+      this.race.over = true;
+      this.race.winner = winner;
+    },
+
     // `touched` is the set of dots currently HELD DOWN (press adds, release removes).
     // A letter is complete only when this set EXACTLY equals targetDots — so a
     // subset (just dot 1) or a superset (1,4,5) does not count. See hasCompleted.
@@ -244,6 +384,19 @@
         touched: {
           1: Array.from(this.players[1].touched),
           2: Array.from(this.players[2].touched),
+        },
+        // per-player target so the mirror can show each player's OWN current
+        // letter during a word race (equals targetDots in every other mode).
+        targetByPlayer: { 1: this.targetDotsFor(1), 2: this.targetDotsFor(2) },
+        posByPlayer: { 1: this.players[1].pos, 2: this.players[2].pos },
+        wordLen: this.letters.length,
+        race: {
+          active: this.race.active,
+          total: this.race.total,
+          asked: this.race.asked,
+          over: this.race.over,
+          winner: this.race.winner,
+          sudden: this.race.sudden,
         },
         lastResult: this.lastResult,
         secondsLeft: Math.max(0, Math.ceil((this.deadline - Date.now()) / 1000)),

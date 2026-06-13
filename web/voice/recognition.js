@@ -22,8 +22,10 @@ const Voice = (() => {
   // Default grammar: a copy of the known commands so the layer works standalone
   // (e.g. in mocks/audio-test.html). P4 overrides via setGrammar(content.commands).
   let grammar = [
-    'one player', 'two player', 'easy', 'medium', 'hard',
+    'one player', 'two player', 'race', 'easy', 'medium', 'hard',
     'rapid fire', 'start', 'repeat', 'quit',
+    'three words', 'four words', 'five words', 'six words',
+    'seven words', 'eight words', 'nine words', 'ten words',
   ];
 
   const callbacks = [];

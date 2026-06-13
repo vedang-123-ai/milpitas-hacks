@@ -104,18 +104,51 @@
   function render() {
     if (typeof GameState === 'undefined' || !GameState.content) return;
     const s = GameState.snapshot();
+    const race = s.race || {};
     $('s-mode').textContent = s.mode;
     $('s-diff').textContent = s.difficulty;
     $('s-score1').textContent = s.scores[1];
     $('s-score2').textContent = s.scores[2];
-    $('prompt').textContent = s.prompt || '—';
-    $('result').textContent = s.lastResult || '';
-    paintCell($('grid1'), s.touched[1], s.targetDots);
-    paintCell($('grid2'), s.touched[2], s.targetDots);
+
+    // prompt + status line: a race shows progress / final, others show lastResult
+    if (race.over) {
+      $('prompt').textContent = race.winner ? `Player ${race.winner} wins the race!` : 'Race over';
+      $('result').textContent = `Final — Player 1: ${s.scores[1]} · Player 2: ${s.scores[2]}`;
+    } else if (race.active) {
+      $('prompt').textContent = s.prompt || '—';
+      const head = race.asked < 1 ? 'Get ready…'
+        : race.asked > race.total ? 'Sudden death'
+        : `Question ${race.asked} of ${race.total}`;
+      $('result').textContent = `${head} — P1 ${s.scores[1]} · P2 ${s.scores[2]}`;
+    } else {
+      $('prompt').textContent = s.prompt || '—';
+      $('result').textContent = s.lastResult || '';
+    }
+
+    // Per-player target so each cell shows that player's OWN current letter
+    // during a word race (equals the shared target in every other mode).
+    const t1 = (s.targetByPlayer && s.targetByPlayer[1]) || s.targetDots;
+    const t2 = (s.targetByPlayer && s.targetByPlayer[2]) || s.targetDots;
+    paintCell($('grid1'), s.touched[1], t1);
+    paintCell($('grid2'), s.touched[2], t2);
+
+    // Victory glow on the winner's cell.
+    const c1 = document.querySelector('.cell.p1');
+    const c2 = document.querySelector('.cell.p2');
+    if (c1) c1.classList.toggle('winner', !!(race.over && race.winner === 1));
+    if (c2) c2.classList.toggle('winner', !!(race.over && race.winner === 2));
+
+    // Readouts: spelling progress during a word race, else need/holding.
     const fmt = (arr) => (arr && arr.length ? arr.slice().sort().join(', ') : '—');
-    const need = fmt(s.targetDots);
-    if ($('read1')) $('read1').innerHTML = `need <b>${need}</b> · holding <b>${fmt(s.touched[1])}</b>`;
-    if ($('read2')) $('read2').innerHTML = `need <b>${need}</b> · holding <b>${fmt(s.touched[2])}</b>`;
+    const readout = (player, target) => {
+      if (race.active && !race.over && s.type !== 'letter' && s.wordLen) {
+        const pos = Math.min((s.posByPlayer && s.posByPlayer[player]) || 0, s.wordLen - 1);
+        return `${s.label} — letter <b>${pos + 1}</b> of <b>${s.wordLen}</b>`;
+      }
+      return `need <b>${fmt(target)}</b> · holding <b>${fmt(s.touched[player])}</b>`;
+    };
+    if ($('read1')) $('read1').innerHTML = readout(1, t1);
+    if ($('read2')) $('read2').innerHTML = readout(2, t2);
   }
 
   // Load words.txt and split by length. medium = 2..7 letters, hard = 8+.
@@ -167,6 +200,10 @@
     if (words.medium.length) content.words_medium = words.medium;
     if (words.hard.length) content.words_hard = words.hard;
     log(`[words] ${words.total} words — medium ${words.medium.length}, hard ${words.hard.length}`);
+
+    // Feed the voice recognizer the authoritative command grammar from content.
+    safe('Voice.setGrammar', () =>
+      typeof Voice !== 'undefined' ? Voice.setGrammar(content.commands) : false);
 
     safe('Engine.init', () => (typeof Engine !== 'undefined' ? Engine.init(content) : false));
 

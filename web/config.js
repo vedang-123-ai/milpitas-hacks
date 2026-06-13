@@ -26,6 +26,10 @@
     // rapid-fire window length in seconds
     RAPID_FIRE_SEC: 30,
 
+    // default number of questions in a 1v1 race when content.json doesn't set a
+    // per-difficulty default (and the fallback if a voice override is invalid).
+    RACE_QUESTIONS: 5,
+
     // Text-to-speech voice. Used by the native macOS `say` path (serve.py) and as
     // a hint for the browser fallback. Change to any voice from `say -v '?'`
     // (e.g. "Alex", "Daniel", "Karen"), or "" for the system default.

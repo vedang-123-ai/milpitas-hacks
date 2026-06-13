@@ -24,6 +24,21 @@
     return "";
   }
 
+  const NUMBER_WORDS = {
+    one: 1, two: 2, three: 3, four: 4, five: 5, six: 6,
+    seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12,
+  };
+
+  // Parse a race-length command like "five words", "3 questions", "best of seven".
+  // Returns the number, or 0 if it isn't a count command.
+  function parseRaceCount(cmd) {
+    const m = cmd.match(/^(?:best of\s+)?([a-z]+|\d+)\s+(?:words?|questions?|rounds?)$/);
+    if (!m) return 0;
+    const token = m[1];
+    const n = /^\d+$/.test(token) ? parseInt(token, 10) : NUMBER_WORDS[token];
+    return n || 0;
+  }
+
   window.Engine = {
     init(content) {
       GameState.init(content);
@@ -66,6 +81,14 @@
         return;
       }
 
+      // "best of N" / "N words" / "N questions" -> set race length (applies to
+      // the next race; say "race" to begin). Checked before difficulty/mode.
+      const count = parseRaceCount(cmd);
+      if (count) {
+        this.setRaceQuestions(count);
+        return;
+      }
+
       if (GameState.content && GameState.content.difficulty[cmd]) {
         this.setDifficulty(cmd);
         return;
@@ -99,6 +122,14 @@
       Speak.say(`${level} difficulty.`);
       currentMode().enter();
       return true;
+    },
+
+    // Voice-configurable race length ("best of N"). Stored for the NEXT race; if
+    // a race is already running it keeps going — say "race" to restart with N.
+    setRaceQuestions(n) {
+      const total = GameState.setRaceQuestions(n);
+      Speak.say(GameState.format("race_questions_set", { TOTAL: total }));
+      return total;
     },
   };
 })();
