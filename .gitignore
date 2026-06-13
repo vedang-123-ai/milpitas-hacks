@@ -1,2 +1,14 @@
 # Claude Code local files
 .claude/
+CLAUDE.md
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Secrets — API keys live here, never committed
+.env
+.env.*
+
+# OS
+.DS_Store

@@ -1,0 +1,50 @@
+<!doctype html>
+<!--
+  web/index.html — app shell + script load order
+  Owner: P4 (Integration). This is the ONE shared wiring file; keep edits to
+  adding <script> tags in dependency order. All logic lives in the modules below.
+
+  The visible UI is intentionally minimal — the real interface is audio. The
+  single always-focused <input> is the Wispr Flow dictation path (optional).
+
+  SCAFFOLD STUB — load order is the contract; fill modules in their own files.
+  Load order (globals defined before consumers):
+    config.js -> audio/* -> voice/* -> game/* -> input/* -> main.js
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DotRace</title>
+</head>
+<body>
+  <main>
+    <h1>DotRace</h1>
+    <!-- Always-focused dictation target for the optional Wispr Flow path -->
+    <input id="voice-input" autofocus aria-label="voice command input" />
+    <pre id="log" aria-hidden="true"></pre>
+  </main>
+
+  <!-- config first -->
+  <script src="config.js"></script>
+  <!-- sensory layer (defines globals: Audio, Speak, Voice) -->
+  <script src="audio/earcons.js"></script>
+  <script src="audio/audio.js"></script>
+  <script src="voice/speak.js"></script>
+  <script src="voice/recognition.js"></script>
+  <script src="voice/wispr-hook.js"></script>
+  <!-- game logic -->
+  <script src="game/state.js"></script>
+  <script src="game/modes/free-explore.js"></script>
+  <script src="game/modes/find-target.js"></script>
+  <script src="game/modes/race.js"></script>
+  <script src="game/modes/rapid-fire.js"></script>
+  <script src="game/engine.js"></script>
+  <!-- input sources (real hub vs mock) -->
+  <script src="input/hub-source.js"></script>
+  <script src="input/mock-source.js"></script>
+  <script src="../mocks/keyboard-emitter.js"></script>
+  <!-- integration entry: picks input source, wires everything -->
+  <script src="main.js"></script>
+</body>
+</html>

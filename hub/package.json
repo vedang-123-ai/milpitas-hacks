@@ -1,0 +1,14 @@
+{
+  "name": "dotrace-hub",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DotRace laptop hub: WebSocket relay between ESP32 sensor node(s) and the browser game, plus static server for /web.",
+  "type": "commonjs",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

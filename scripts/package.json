@@ -1,0 +1,11 @@
+{
+  "name": "dotrace-content-gen",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Build-time LLM generator for DotRace curriculum. Add ONE provider SDK to dependencies: `openai` OR `@anthropic-ai/sdk`, plus `dotenv` to read the local .env. Then `npm run generate`.",
+  "scripts": {
+    "generate": "node generate-content.mjs"
+  },
+  "dependencies": {}
+}
