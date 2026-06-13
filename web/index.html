@@ -1,15 +1,19 @@
 <!doctype html>
 <!--
   web/index.html — app shell + script load order
-  Owner: P4 (Integration). This is the ONE shared wiring file. Keep edits to the
-  <head> assets, the presentational markup, and the <script> load order below.
+  Owner: P4 (Integration). The ONE shared wiring file.
 
-  The VISIBLE screen is the "see the invisible game" display for sighted
-  facilitators and judges — it mirrors the audio (the blind player's real UI) by
-  lighting the Braille dots live from GameState. All logic lives in the modules.
+  The game is AUDIO-FIRST — the real interface is sound. This screen is the
+  "see the invisible game" mirror for sighted facilitators/judges (like the LEDs
+  on the hardware): it shows the prompt, scores, and which dots each player holds,
+  and the dots are clickable so the whole game is playable with no keyboard/board.
 
-  Load order (globals defined before consumers):
-    config.js -> audio/* -> voice/* -> game/* -> ui.js -> input/* -> main.js
+  IMPORTANT: browsers block audio + TTS until a user gesture, so the game is gated
+  behind a "Begin" overlay — the click unlocks Web Audio / TTS (see main.js).
+
+  Presentation lives in ui.css; all behavior lives in the modules. Load order is
+  the contract (globals defined before consumers):
+    config -> audio/* -> voice/* -> game/* -> input/* -> main
 -->
 <html lang="en">
 <head>
@@ -24,60 +28,96 @@
   <link rel="stylesheet" href="ui.css" />
 </head>
 <body>
+
+  <!-- gesture gate: unlocks Web Audio + TTS on the first click -->
+  <div id="start-overlay">
+    <div class="gate-card">
+      <div class="gate-mark">D<span class="dot-i">o</span>tRace</div>
+      <button id="start-btn">Begin</button>
+      <p class="hint">Put on headphones — the game is spatial audio.</p>
+    </div>
+  </div>
+
   <div class="shell">
 
     <!-- ── header ──────────────────────────────────────────────────────── -->
     <header class="masthead">
       <div class="wordmark">
         <h1>D<span class="dot-i">o</span>tRace</h1>
-        <span class="tag">braille readiness</span>
+        <span class="tag">braille readiness · keyboard or clicks stand in for the pads</span>
       </div>
       <div class="pills">
-        <span class="pill"><span class="key">mode</span> <b id="mode-val">—</b></span>
-        <span class="pill"><span class="key">level</span> <b id="diff-val">—</b></span>
-        <span class="pill timer" id="timer-pill" hidden><span class="key">time</span> <b id="timer-val">—</b></span>
+        <span class="pill"><span class="key">mode</span> <b id="s-mode">—</b></span>
+        <span class="pill"><span class="key">level</span> <b id="s-diff">—</b></span>
+        <span class="pill" id="i-status" title="input source"><span class="key">input</span> <b>—</b></span>
+        <span class="pill" id="a-status" title="audio diagnostics"><span class="key">audio</span> <b>—</b></span>
       </div>
     </header>
 
     <!-- ── the audible prompt, made visible ────────────────────────────── -->
     <section class="prompt-block">
       <div class="prompt-eyebrow">now playing</div>
-      <p id="prompt">Put on headphones — press a key or say a command.</p>
-      <div class="target-chip">target <span class="glyph" id="target-glyph">—</span></div>
+      <p id="prompt" aria-live="polite">Press Begin to start…</p>
+      <div class="result" id="result"></div>
+      <div class="caption" id="caption" aria-live="polite"></div>
     </section>
+
+    <!-- ── on-screen controls (no keyboard/voice required) ─────────────── -->
+    <div class="controls">
+      <button class="btn" id="cmd-1p">1 Player</button>
+      <button class="btn" id="cmd-2p">2 Player · Race</button>
+      <span class="sep" aria-hidden="true"></span>
+      <button class="btn" id="cmd-easy">Easy</button>
+      <button class="btn" id="cmd-medium">Medium</button>
+      <button class="btn" id="cmd-hard">Hard</button>
+      <span class="sep" aria-hidden="true"></span>
+      <button class="btn ghost" id="repeat-btn">Repeat</button>
+      <button class="btn ghost" id="test-btn">Test sound</button>
+    </div>
 
     <!-- ── two Braille cells (left = P1, right = P2; mirrors audio pan) ──── -->
     <main class="stage">
-      <section class="cell" id="cell-1" data-player="1">
+      <section class="cell p1" data-player="1">
         <span class="notch" aria-hidden="true"></span>
         <div class="cell-head">
-          <span class="who">Player 1</span>
-          <span class="score" id="score-1">0</span>
+          <h3 class="who">Player 1 <span class="keys">1 2 3 4 5 6</span></h3>
+          <span class="score" id="s-score1">0</span>
         </div>
-        <div class="grid" id="grid-1" aria-hidden="true"></div>
+        <div class="grid" id="grid1"></div>
+        <div class="readout" id="read1"></div>
       </section>
 
-      <section class="cell" id="cell-2" data-player="2">
+      <section class="cell p2" data-player="2">
         <span class="notch" aria-hidden="true"></span>
         <div class="cell-head">
-          <span class="who">Player 2</span>
-          <span class="score" id="score-2">0</span>
+          <h3 class="who">Player 2 <span class="keys">Q W E R T Y</span></h3>
+          <span class="score" id="s-score2">0</span>
         </div>
-        <div class="grid" id="grid-2" aria-hidden="true"></div>
+        <div class="grid" id="grid2"></div>
+        <div class="readout" id="read2"></div>
       </section>
     </main>
 
-    <div class="ticker" id="ticker">ready</div>
+    <p class="legend">
+      <span class="swatch needed"></span>needed
+      <span class="swatch held"></span>correct &amp; held
+      <span class="swatch wrong"></span>wrong dot
+      &nbsp;— hold <b>exactly</b> the needed dots to score.
+    </p>
 
-    <!-- ── command bar + signal log ────────────────────────────────────── -->
+    <!-- ── footer: help + signal log ───────────────────────────────────── -->
     <section class="console">
-      <div class="cmdbar" id="cmdbar">
-        <span class="lead"><span class="mic" aria-hidden="true"></span> say or type</span>
-        <!-- Always-focused dictation target for the optional Wispr Flow path -->
-        <input id="voice-input" autofocus autocomplete="off" spellcheck="false"
-               aria-label="voice command input"
-               placeholder="one player · two player · easy · hard · rapid fire · start · repeat" />
-      </div>
+      <details class="logwrap">
+        <summary>how to play <span class="chev">›</span></summary>
+        <div class="help">
+          <b>Two ways to “touch” a pad:</b> click the dots on screen, or press the keys
+          (P1 = <code>1–6</code>, P2 = <code>Q W E R T Y</code>). A letter = a set of dots.<br />
+          <b>Find-target:</b> it says <i>“Touch the letter A”</i> → click dot <b>1</b> (or press <code>1</code>).
+          B = 1+2 · C = 1+4 · E = 1+5. A wrong dot is a gentle buzz, never a penalty.<br />
+          <b>Commands:</b> use the buttons above, or say them into the mic.
+          A <b>dashed ring</b> marks a needed dot; a <b>lit</b> dot is held.
+        </div>
+      </details>
 
       <details class="logwrap">
         <summary>signal log <span class="chev">›</span></summary>
@@ -94,7 +134,8 @@
   <script src="audio/audio.js"></script>
   <script src="voice/speak.js"></script>
   <script src="voice/recognition.js"></script>
-  <script src="voice/wispr-hook.js"></script>
+  <!-- wispr-hook.js intentionally not loaded: the dictation textbox was unreliable;
+       commands are now on-screen buttons (main.js) + optional mic voice. -->
   <!-- game logic -->
   <script src="game/state.js"></script>
   <script src="game/modes/free-explore.js"></script>
@@ -102,8 +143,6 @@
   <script src="game/modes/race.js"></script>
   <script src="game/modes/rapid-fire.js"></script>
   <script src="game/engine.js"></script>
-  <!-- presentational display driver (reads GameState; defines global UI) -->
-  <script src="ui.js"></script>
   <!-- input sources (real hub vs mock) -->
   <script src="input/hub-source.js"></script>
   <script src="input/mock-source.js"></script>

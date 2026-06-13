@@ -19,3 +19,8 @@
 
   window.MockSource = { start };
 })();
+
+// NOTE: the ESP32 UDP-listener prototype that used to live here (commented) has
+// moved to its proper home — hub/server.py — where it's a full UDP->WebSocket
+// bridge feeding Contract-1 messages to web/input/hub-source.js. Run the app
+// WITHOUT ?mock=1 to use real hardware via that hub.

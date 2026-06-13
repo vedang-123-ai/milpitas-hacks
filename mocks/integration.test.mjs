@@ -55,7 +55,7 @@ function MockSpeechRecognition() { this.start = () => {}; this.stop = () => {}; 
 
 // sandbox IS the global, and window points at it (mirrors a real browser).
 const sandbox = {
-  console, setTimeout, clearTimeout, URLSearchParams,
+  console, setTimeout, clearTimeout, setInterval, clearInterval, URLSearchParams,
   location: { search: '?mock=1' },
   document: { getElementById: () => null, addEventListener },
   addEventListener,

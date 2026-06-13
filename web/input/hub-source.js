@@ -12,17 +12,20 @@
  * envelope, that gets unwrapped HERE — nothing downstream changes.
  */
 (function () {
-  function start(onMessage) {
+  function start(onMessage, onStatus) {
     let ws;
     let retryMs = 500; // backoff, capped below
+    const status = (s) => { try { onStatus && onStatus(s); } catch (_) {} };
 
     function connect() {
       console.info('[hub-source] connecting to', CONFIG.HUB_URL);
+      status('connecting');
       ws = new WebSocket(CONFIG.HUB_URL);
 
       ws.addEventListener('open', () => {
         retryMs = 500; // reset backoff on a good connection
         console.info('[hub-source] connected');
+        status('connected');
       });
 
       ws.addEventListener('message', (ev) => {
@@ -43,6 +46,7 @@
 
       ws.addEventListener('close', () => {
         console.warn(`[hub-source] disconnected — retrying in ${retryMs}ms`);
+        status('disconnected');
         setTimeout(connect, retryMs);
         retryMs = Math.min(retryMs * 2, 5000); // exponential backoff, cap 5s
       });

@@ -28,8 +28,9 @@
   input.addEventListener('change', handle);
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') handle(); });
 
-  // Keep the field focused so dictation always has a target.
-  const refocus = () => { try { input.focus(); } catch (_) {} };
-  input.addEventListener('blur', () => setTimeout(refocus, 50));
-  refocus();
+  // NOTE (P4 integration): the box no longer AUTO-grabs/holds focus. The previous
+  // always-refocus stole focus from the keyboard mock (so number-key "touches"
+  // and even button clicks broke) and isn't needed — Wispr types into whatever is
+  // focused, so the user just clicks the field when they want to dictate. Flagged
+  // for P3. (Was: refocus() on load + setTimeout refocus on every blur.)
 })();
