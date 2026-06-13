@@ -20,20 +20,38 @@
     KeyR: [2, 4], KeyT: [2, 5], KeyY: [2, 6],
   };
 
+  // If the user is typing in a text field, let keys through to it instead of
+  // treating them as pad touches — otherwise letters/digits get eaten and the
+  // (optional) dictation box can never receive a command.
+  function typingInField(e) {
+    const el = e.target;
+    if (!el) return false;
+    const tag = el.tagName;
+    return tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable;
+  }
+
+  // Player 2 plays on LETTER keys (Q-Y), which are also how you type word-commands
+  // into a focused text box — so those yield while typing. Player 1's NUMBER keys
+  // never yield (command words contain no digits), so "press 1" always registers
+  // a touch even if the dictation box happens to be focused.
+  function shouldYield(e, player) {
+    return player === 2 && typingInField(e);
+  }
+
+  function emit(e, event, onMessage) {
+    const hit = KEY_MAP[e.code];
+    if (!hit) return;
+    if (shouldYield(e, hit[0])) return;
+    e.preventDefault();
+    onMessage({ player: hit[0], dot: hit[1], event });
+  }
+
   function start(onMessage) {
     window.addEventListener('keydown', (e) => {
       if (e.repeat) return;            // ignore auto-repeat: a held key is ONE down
-      const hit = KEY_MAP[e.code];
-      if (!hit) return;
-      e.preventDefault();
-      onMessage({ player: hit[0], dot: hit[1], event: 'down' });
+      emit(e, 'down', onMessage);
     });
-    window.addEventListener('keyup', (e) => {
-      const hit = KEY_MAP[e.code];
-      if (!hit) return;
-      e.preventDefault();
-      onMessage({ player: hit[0], dot: hit[1], event: 'up' });
-    });
+    window.addEventListener('keyup', (e) => emit(e, 'up', onMessage));
   }
 
   window.KeyboardEmitter = { start };

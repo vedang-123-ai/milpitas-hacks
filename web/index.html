@@ -1,28 +1,188 @@
 <!doctype html>
 <!--
   web/index.html — app shell + script load order
-  Owner: P4 (Integration). This is the ONE shared wiring file; keep edits to
-  adding <script> tags in dependency order. All logic lives in the modules below.
+  Owner: P4 (Integration). The ONE shared wiring file.
 
-  The visible UI is intentionally minimal — the real interface is audio. The
-  single always-focused <input> is the Wispr Flow dictation path (optional).
+  The game is AUDIO-FIRST — the real interface is sound. The on-screen panel is a
+  sighted-judge mirror (like the LEDs on the hardware): it shows the prompt, scores,
+  and which dots each player has touched. All logic lives in the modules below.
 
-  SCAFFOLD STUB — load order is the contract; fill modules in their own files.
-  Load order (globals defined before consumers):
-    config.js -> audio/* -> voice/* -> game/* -> input/* -> main.js
+  IMPORTANT: browsers block audio + TTS until a user gesture, so we gate the game
+  behind a "Tap to Start" overlay. The click unlocks Web Audio and re-speaks the
+  current prompt (see main.js).
+
+  Load order is the contract (globals defined before consumers):
+    config -> audio/* -> voice/* -> game/* -> input/* -> main
 -->
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>DotRace</title>
+  <style>
+    :root {
+      --bg: #0e1116; --panel: #171c24; --line: #2a313c; --ink: #e8edf4;
+      --muted: #8a95a5; --accent: #4da3ff; --good: #46d39a; --p1: #4da3ff; --p2: #ffb454;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: -apple-system, system-ui, sans-serif;
+      background: var(--bg); color: var(--ink); min-height: 100vh;
+    }
+    header { padding: 18px 24px 8px; }
+    h1 { margin: 0; font-size: 28px; letter-spacing: .5px; }
+    .tagline { color: var(--muted); font-size: 13px; margin-top: 2px; }
+    main { padding: 8px 24px 32px; max-width: 880px; margin: 0 auto; }
+
+    /* Start overlay */
+    #start-overlay {
+      position: fixed; inset: 0; background: rgba(8,10,14,.94); z-index: 50;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+    }
+    #start-btn {
+      font-size: 22px; padding: 18px 40px; border-radius: 14px; border: 0; cursor: pointer;
+      background: var(--accent); color: #06243f; font-weight: 700;
+    }
+    #start-btn:hover { filter: brightness(1.08); }
+    .hint { color: var(--muted); font-size: 14px; }
+
+    /* Prompt + status */
+    .prompt {
+      font-size: 26px; font-weight: 700; padding: 16px 18px; margin: 12px 0;
+      background: var(--panel); border: 1px solid var(--line); border-radius: 12px; min-height: 30px;
+    }
+    .status { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+    .chip {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
+      padding: 6px 14px; font-size: 13px; color: var(--muted);
+    }
+    .chip b { color: var(--ink); }
+    .result { color: var(--good); font-size: 13px; min-height: 16px; margin: -4px 0 8px; }
+    /* live caption: shows whatever is being spoken, so the demo never depends on
+       TTS actually producing sound (accessibility + flaky-audio fallback) */
+    .caption { font-size: 15px; color: var(--ink); background: #10141a; border: 1px solid var(--line);
+      border-radius: 8px; padding: 8px 12px; margin: 0 0 14px; min-height: 18px; }
+    .caption::before { content: "🗣 "; opacity: .6; }
+    .controls { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 16px; }
+    .btn { font-size: 13px; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line);
+      background: var(--panel); color: var(--ink); cursor: pointer; }
+    .btn:hover { border-color: var(--accent); }
+    .btn.on { background: var(--accent); color: #06243f; border-color: var(--accent); font-weight: 700; }
+
+    /* Two Braille cells */
+    .cells { display: flex; gap: 28px; flex-wrap: wrap; }
+    .cell { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
+    .cell h3 { margin: 0 0 10px; font-size: 14px; }
+    .cell.p1 h3 { color: var(--p1); } .cell.p2 h3 { color: var(--p2); }
+    .grid { display: grid; grid-template-columns: repeat(2, 56px); grid-template-rows: repeat(3, 56px); gap: 10px; }
+    /* dot order in DOM = 1,4,2,5,3,6 to match the 2-col Braille layout */
+    .dot {
+      width: 56px; height: 56px; border-radius: 50%; border: 2px solid var(--line);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--muted); font-size: 12px; line-height: 1.1; text-align: center;
+      transition: all .08s; cursor: pointer; user-select: none;
+    }
+    .dot:hover { border-color: var(--accent); transform: scale(1.05); }
+    .dot:active { transform: scale(0.94); }
+    .dot .num { font-weight: 700; font-size: 15px; color: var(--ink); }
+    .dot.target { border-color: var(--accent); border-style: dashed; border-width: 3px; }
+    .dot.on { background: var(--good); border-color: var(--good); color: #06291d;
+      box-shadow: 0 0 16px var(--good); animation: pop .12s ease; }
+    .dot.on .num { color: #06291d; }
+    .dot.wrong { background: #e0556a; border-color: #e0556a; color: #2a0610;
+      box-shadow: 0 0 16px #e0556a; animation: pop .12s ease; }
+    .dot.wrong .num { color: #2a0610; }
+    @keyframes pop { from { transform: scale(.8); } to { transform: scale(1); } }
+    .readout { margin-top: 10px; font-size: 13px; color: var(--muted); }
+    .readout b { color: var(--ink); }
+    .legend { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+    .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: middle; margin: 0 3px 0 10px; }
+
+    /* Help + log */
+    details { margin-top: 18px; }
+    summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+    .help { font-size: 13px; color: var(--muted); line-height: 1.7; margin-top: 8px; }
+    .help code { background: #222a35; padding: 1px 6px; border-radius: 5px; color: var(--ink); }
+    #log { font-size: 12px; color: var(--muted); background: #10141a; border: 1px solid var(--line);
+      border-radius: 10px; padding: 10px; max-height: 160px; overflow: auto; white-space: pre-wrap; }
+    .wispr { margin-top: 18px; }
+    .wispr label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+    #voice-input { width: 280px; max-width: 100%; padding: 7px 10px; border-radius: 8px;
+      border: 1px solid var(--line); background: #10141a; color: var(--ink); }
+  </style>
 </head>
 <body>
-  <main>
+  <!-- gesture gate: unlocks audio + TTS -->
+  <div id="start-overlay">
+    <button id="start-btn">▶  Tap to Start</button>
+    <div class="hint">🎧 Put on headphones — the game is spatial audio.</div>
+  </div>
+
+  <header>
     <h1>DotRace</h1>
-    <!-- Always-focused dictation target for the optional Wispr Flow path -->
-    <input id="voice-input" autofocus aria-label="voice command input" />
-    <pre id="log" aria-hidden="true"></pre>
+    <div class="tagline">Audio-first Braille-readiness game · keyboard stands in for the touch pads</div>
+  </header>
+
+  <main>
+    <div class="status">
+      <span class="chip">Mode: <b id="s-mode">—</b></span>
+      <span class="chip">Difficulty: <b id="s-diff">—</b></span>
+      <span class="chip" style="color:var(--p1)">P1: <b id="s-score1">0</b></span>
+      <span class="chip" style="color:var(--p2)">P2: <b id="s-score2">0</b></span>
+      <span class="chip" id="i-status" title="input source">⌨ —</span>
+      <span class="chip" id="a-status" title="audio diagnostics">🔊 —</span>
+    </div>
+
+    <div class="prompt" id="prompt" aria-live="polite">Tap Start to begin…</div>
+    <div class="result" id="result"></div>
+    <div class="caption" id="caption" aria-live="polite"></div>
+
+    <div class="controls">
+      <button class="btn" id="cmd-1p">1 Player</button>
+      <button class="btn" id="cmd-2p">2 Player (Race)</button>
+      <button class="btn" id="cmd-easy">Easy</button>
+      <button class="btn" id="cmd-medium">Medium</button>
+      <button class="btn" id="cmd-hard">Hard</button>
+      <button class="btn" id="repeat-btn">🔁 Repeat</button>
+      <button class="btn" id="test-btn">🔊 Test sound</button>
+    </div>
+
+    <div class="cells">
+      <div class="cell p1">
+        <h3>Player 1 — keys 1·2·3·4·5·6</h3>
+        <div class="grid" id="grid1"></div>
+        <div class="readout" id="read1"></div>
+      </div>
+      <div class="cell p2">
+        <h3>Player 2 — keys Q·W·E·R·T·Y</h3>
+        <div class="grid" id="grid2"></div>
+        <div class="readout" id="read2"></div>
+      </div>
+    </div>
+    <div class="legend">
+      <span class="swatch" style="background:var(--accent)"></span>needed (dashed)
+      <span class="swatch" style="background:var(--good)"></span>correct &amp; held
+      <span class="swatch" style="background:#e0556a"></span>wrong dot held
+      &nbsp;— hold <b>exactly</b> the needed dots to score.
+    </div>
+
+    <details open>
+      <summary>How to play</summary>
+      <div class="help">
+        <b>Two ways to "touch" a pad:</b> click the dots on screen, OR press the keys
+        (P1 = <code>1-6</code>, P2 = <code>Q W E R T Y</code>). A letter = a set of dots.<br>
+        <b>Find-target:</b> it says <i>"Touch the letter A"</i> → click dot <b>1</b> (or press <code>1</code>).
+        B=1+2 · C=1+4 · E=1+5. Wrong dot = gentle buzz, no penalty.<br>
+        <b>Commands:</b> click the buttons above (1 Player, 2 Player, Easy/Medium/Hard),
+        or say them into the mic.<br>
+        <b>Dashed ring</b> = a dot in the current target · <b>green</b> = touched.
+      </div>
+    </details>
+
+    <details>
+      <summary>Event log</summary>
+      <pre id="log"></pre>
+    </details>
   </main>
 
   <!-- config first -->
@@ -32,7 +192,8 @@
   <script src="audio/audio.js"></script>
   <script src="voice/speak.js"></script>
   <script src="voice/recognition.js"></script>
-  <script src="voice/wispr-hook.js"></script>
+  <!-- wispr-hook.js removed: the dictation textbox was unreliable; commands are
+       now on-screen buttons (see main.js) + optional mic voice. -->
   <!-- game logic -->
   <script src="game/state.js"></script>
   <script src="game/modes/free-explore.js"></script>

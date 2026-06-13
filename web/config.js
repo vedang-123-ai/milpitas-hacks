@@ -25,5 +25,10 @@
 
     // rapid-fire window length in seconds
     RAPID_FIRE_SEC: 30,
+
+    // Text-to-speech voice. Used by the native macOS `say` path (serve.py) and as
+    // a hint for the browser fallback. Change to any voice from `say -v '?'`
+    // (e.g. "Alex", "Daniel", "Karen"), or "" for the system default.
+    TTS_VOICE: 'Samantha',
   };
 })();

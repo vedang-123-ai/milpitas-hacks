@@ -1,0 +1,3 @@
+# DotRace hub (hub/server.py) — Python deps
+# install:  python3 -m pip install -r requirements.txt
+websockets>=12.0

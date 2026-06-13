@@ -3,14 +3,7 @@
  * Owner: P2 (Game Logic)
  */
 (function () {
-  const POSITION_SEQUENCE = [4, 1, 3, 6];
-  const DOT_PROMPT_KEYS = {
-    1: "find_dot_1",
-    3: "find_dot_3",
-    4: "find_dot_4",
-    6: "find_dot_6",
-  };
-  const STARTER_LETTERS = ["A", "B", "C", "E", "I", "K"];
+  const randItem = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
   function makePlayers() {
     return {
@@ -39,14 +32,12 @@
     currentLabel: "",
     currentType: "letter",
     targetDots: [],
+    letters: [],        // sequence of { letter, dots } for the current challenge
+    letterIndex: 0,     // which letter of that sequence is the active target
     activePlayers: 1,
     deadline: 0,
     round: 0,
     lastResult: "Ready",
-    sequence: {
-      position: 0,
-      letter: { easy: 0, medium: 0, hard: 0 },
-    },
 
     init(content) {
       this.content = content;
@@ -82,54 +73,106 @@
       this.resetTouches();
       if (challenge) {
         this.round += 1;
+        this.letters = challenge.letters || [];
+        this.letterIndex = 0;
         this.currentPrompt = challenge.prompt;
         this.currentLabel = challenge.label;
         this.currentType = challenge.type;
-        this.targetDots = challenge.dots.slice();
+        this.targetDots = this.letters.length
+          ? this.letters[0].dots.slice()
+          : (challenge.dots || []).slice();
         this.lastResult = "New target";
       }
     },
 
-    nextChallenge(options = {}) {
-      const tier = this.content.difficulty[this.difficulty];
-      const usePositions = options.positions === true && tier.positions;
+    // Advance to the next letter in a multi-letter challenge (word/sentence).
+    // Returns { done:true } when the whole word/sentence is finished, else
+    // { done:false, letter } for the next letter to trace.
+    advanceLetter() {
+      this.letterIndex += 1;
+      if (this.letterIndex < this.letters.length) {
+        this.resetTouches();
+        const cur = this.letters[this.letterIndex];
+        this.targetDots = cur.dots.slice();
+        this.lastResult = `Next letter ${cur.letter}`;
+        return { done: false, letter: cur.letter };
+      }
+      return { done: true };
+    },
 
-      if (usePositions) {
-        const dot = POSITION_SEQUENCE[this.sequence.position % POSITION_SEQUENCE.length];
-        this.sequence.position += 1;
+    format(key, values) {
+      return formatPrompt((this.content.prompts && this.content.prompts[key]) || "", values);
+    },
+
+    wordToLetters(word) {
+      return String(word)
+        .toUpperCase()
+        .split("")
+        .map((ch) => ({ letter: ch, dots: (this.content.letters[ch] || []).slice() }))
+        .filter((x) => x.dots.length);
+    },
+
+    // Build the next challenge. Difficulty decides the SHAPE:
+    //   easy   -> a random single letter
+    //   medium -> a random word (traced letter by letter)
+    //   hard   -> a sentence of random words (traced letter by letter)
+    // Race & rapid-fire always use a single letter, because their shared target
+    // can't track each player's position through a multi-letter word.
+    nextChallenge() {
+      const allLetters = Object.keys(this.content.letters);
+      const tier = (this.content.difficulty && this.content.difficulty[this.difficulty]) || { kind: "letter" };
+      const kind = tier.kind || "letter";
+      const soloWords = this.mode === "find-target";
+
+      if (!soloWords || kind === "letter") {
+        const L = randItem(allLetters);
         return {
-          type: "position",
-          label: `dot ${dot}`,
-          dots: [dot],
-        prompt: this.content.prompts[DOT_PROMPT_KEYS[dot]],
-      };
-    }
+          type: "letter",
+          label: L,
+          letters: [{ letter: L, dots: this.content.letters[L].slice() }],
+          prompt: this.format("trace_letter", { LETTER: L }),
+        };
+      }
 
-      const letters = this.lettersForDifficulty(tier);
-      const index = this.sequence.letter[this.difficulty] % letters.length;
-      const letter = letters[index];
-      this.sequence.letter[this.difficulty] += 1;
+      if (kind === "word") {
+        const word = randItem(this.content.words || allLetters);
+        const seq = this.wordToLetters(word);
+        return {
+          type: "word",
+          label: word,
+          letters: seq,
+          prompt: this.format("spell_word", { WORD: word, LETTER: seq[0].letter }),
+        };
+      }
 
+      // sentence
+      const n = tier.wordsPerSentence || 3;
+      const words = [];
+      for (let i = 0; i < n; i++) words.push(randItem(this.content.words || allLetters));
+      const sentence = words.join(" ");
+      const seq = words.flatMap((w) => this.wordToLetters(w));
       return {
-        type: "letter",
-        label: letter,
-        dots: this.content.letters[letter].slice(),
-        prompt: formatPrompt(this.content.prompts.trace_letter, { LETTER: letter }),
+        type: "sentence",
+        label: sentence,
+        letters: seq,
+        prompt: this.format("spell_sentence", { SENTENCE: sentence, LETTER: seq[0].letter }),
       };
     },
 
-    lettersForDifficulty(tier) {
-      const listed = tier.letters && tier.letters.length ? tier.letters : Object.keys(this.content.letters);
-      if (this.difficulty !== "easy" || listed.length > 1) return listed;
-
-      const starters = STARTER_LETTERS.filter((letter) => this.content.letters[letter]);
-      return starters.length > 1 ? starters : listed;
-    },
-
+    // `touched` is the set of dots currently HELD DOWN (press adds, release removes).
+    // A letter is complete only when this set EXACTLY equals targetDots — so a
+    // subset (just dot 1) or a superset (1,4,5) does not count. See hasCompleted.
     addTouch(player, dot) {
       const playerState = this.players[player];
       if (!playerState) return false;
       playerState.touched.add(dot);
+      return true;
+    },
+
+    removeTouch(player, dot) {
+      const playerState = this.players[player];
+      if (!playerState) return false;
+      playerState.touched.delete(dot);
       return true;
     },
 

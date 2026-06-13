@@ -38,30 +38,26 @@
     },
 
     onTouch(player, dot, event) {
-      if (event !== "down" || !active()) return;
       if (player > GameState.activePlayers) return;
 
-      if (!GameState.targetDots.includes(dot)) {
+      if (event === "up") { GameState.removeTouch(player, dot); return; }
+      if (event !== "down" || !active()) return;
+      if (GameState.hasTouched(player, dot)) return;
+
+      GameState.addTouch(player, dot); // add every held dot (a wrong one blocks the match)
+      if (GameState.targetDots.includes(dot)) {
+        Audio.playDot(player, dot, true);
+      } else {
         GameState.markResult(`Player ${player} touched wrong dot ${dot}`);
         Audio.buzz(player);
         return;
       }
-
-      if (GameState.hasTouched(player, dot)) {
-        GameState.markResult(`Player ${player} already found dot ${dot}`);
-        return;
-      }
-
-      GameState.addTouch(player, dot);
-      Audio.playDot(player, dot, true);
 
       if (GameState.hasCompleted(player)) {
         GameState.score(player);
         GameState.markResult(`Player ${player} completed ${GameState.currentLabel}`);
         Speak.say("correct");
         promptNext();
-      } else {
-        GameState.markResult(`Player ${player} found dot ${dot}`);
       }
     },
 
