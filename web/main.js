@@ -110,11 +110,13 @@
     $('s-score1').textContent = s.scores[1];
     $('s-score2').textContent = s.scores[2];
 
-    // prompt + status line: a race shows progress / final, others show lastResult
-    if (race.over) {
+    // prompt + status line: a race shows progress / final, others show lastResult.
+    // Once the finished race is dismissed (auto-clears a few seconds after the
+    // win) we fall through to the neutral menu so nothing lingers on screen.
+    if (race.over && !race.dismissed) {
       $('prompt').textContent = race.winner ? `Player ${race.winner} wins the race!` : 'Race over';
       $('result').textContent = `Final — Player 1: ${s.scores[1]} · Player 2: ${s.scores[2]}`;
-    } else if (race.active) {
+    } else if (race.active && !race.over) {
       $('prompt').textContent = s.prompt || '—';
       const head = race.asked < 1 ? 'Get ready…'
         : race.asked > race.total ? 'Sudden death'

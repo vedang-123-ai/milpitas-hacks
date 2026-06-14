@@ -21,6 +21,7 @@
   const INTRO_MS = 2000;   // intro -> first question
   const POINT_MS = 1500;   // point announced -> next question / winner
   const TIE_MS = 1300;     // "sudden death!" -> the extra question
+  const TEARDOWN_MS = 4500; // winner shown this long, then the screen clears
 
   // `gen` invalidates timers from a previous race when a new one starts or the
   // mode changes — a queued question must never fire into the wrong match.
@@ -69,6 +70,8 @@
       GameState.markResult(`Player ${winner} wins the race, ${s1} to ${s2}`);
       Audio.win(winner);
       speak("race_win", { WINNER: winner, S1: s1, S2: s2 });
+      // clear the win banner + leftover dots after a beat so nothing lingers
+      later(() => { GameState.raceTeardown(); Speak.say(GameState.currentPrompt); }, TEARDOWN_MS);
     } else {
       // Sudden death makes a true tie impossible, but never declare a non-winner.
       GameState.markResult(`Tied ${s1} to ${s2}`);

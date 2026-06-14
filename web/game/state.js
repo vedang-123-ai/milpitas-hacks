@@ -44,7 +44,7 @@
     // 1v1 race match state. `active` while a race is in progress, `over` once a
     // winner is declared. `asked` counts questions shown; once asked >= total and
     // scores differ the match ends (a tie triggers sudden-death questions).
-    race: { active: false, total: 0, asked: 0, over: false, winner: 0, sudden: false },
+    race: { active: false, total: 0, asked: 0, over: false, winner: 0, sudden: false, dismissed: false },
     raceQuestionsOverride: null, // voice-set "best of N"; null = use difficulty default
 
     init(content) {
@@ -236,6 +236,7 @@
         over: false,
         winner: 0,
         sudden: false,
+        dismissed: false,
       };
     },
 
@@ -315,6 +316,25 @@
     raceFinish(winner) {
       this.race.over = true;
       this.race.winner = winner;
+    },
+
+    // Tear DOWN the on-screen leftovers of a finished race (win banner, the last
+    // question's dot highlights) and return to a neutral menu prompt — WITHOUT
+    // erasing the result (over/winner/scores stay, so the match is still "over"
+    // and further pad input is ignored). `dismissed` tells the mirror to stop
+    // drawing the banner. Say "two player" to race again, or switch modes.
+    raceTeardown() {
+      this.race.active = false;
+      this.race.dismissed = true;
+      this.resetTouches();
+      this.players[1].pos = 0;
+      this.players[2].pos = 0;
+      this.letters = [];
+      this.targetDots = [];
+      this.currentLabel = "";
+      this.currentType = "letter";
+      this.currentPrompt = this.format("menu", {});
+      this.lastResult = "";
     },
 
     // `touched` is the set of dots currently HELD DOWN (press adds, release removes).
@@ -397,6 +417,7 @@
           over: this.race.over,
           winner: this.race.winner,
           sudden: this.race.sudden,
+          dismissed: this.race.dismissed,
         },
         lastResult: this.lastResult,
         secondsLeft: Math.max(0, Math.ceil((this.deadline - Date.now()) / 1000)),
