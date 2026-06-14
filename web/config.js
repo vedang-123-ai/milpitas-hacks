@@ -30,9 +30,9 @@
     // per-difficulty default (and the fallback if a voice override is invalid).
     RACE_QUESTIONS: 5,
 
-    // Text-to-speech voice. Used by the native macOS `say` path (serve.py) and as
-    // a hint for the browser fallback. Change to any voice from `say -v '?'`
-    // (e.g. "Alex", "Daniel", "Karen"), or "" for the system default.
-    TTS_VOICE: 'Samantha',
+    // Text-to-speech voice. Empty string = let serve.py auto-pick the BEST
+    // installed voice (prefers a downloaded Premium/Siri voice, else Samantha).
+    // Set a specific `say -v '?'` name here to force one (e.g. "Ava (Premium)").
+    TTS_VOICE: '',
   };
 })();

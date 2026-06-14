@@ -61,9 +61,12 @@
     locked = true;
     GameState.score(player);
     GameState.markResult(`Player ${player} completed ${GameState.currentLabel}`);
-    Speak.say(GameState.format("correct_word", { WORD: GameState.currentLabel }));
-    // pause before the next prompt so the "Correct" confirmation isn't cut off
-    window.setTimeout(promptNext, NEXT_DELAY_MS);
+    const line = GameState.format("correct_word", { WORD: GameState.currentLabel });
+    Speak.say(line);
+    // Pause before the next prompt long enough for "Correct. WORD." to FINISH —
+    // scaled to its length so a long word (e.g. ADMINISTRATION) isn't cut off.
+    const delay = Math.max(NEXT_DELAY_MS, 700 + line.length * 85);
+    window.setTimeout(promptNext, delay);
   }
 
   window.FindTargetMode = {
