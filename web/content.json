@@ -44,5 +44,5 @@
     "race_questions_set": "Best of {TOTAL}. Say race to begin.",
     "menu": "Main menu. Say one player, or two player. Say easy, medium, or hard to change level."
   },
-  "commands": ["one player","two player","race","easy","medium","hard","rapid fire","start","repeat","quit","three words","four words","five words","six words","seven words","eight words","nine words","ten words"]
+  "commands": ["one player","two player","race","easy","medium","hard","rapid fire","start","repeat","quit","practice","reset stats","three words","four words","five words","six words","seven words","eight words","nine words","ten words"]
 }

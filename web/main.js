@@ -117,6 +117,42 @@
     if (typeof GameState !== 'undefined' && GameState.setPracticeLetters) GameState.setPracticeLetters(null);
   }
 
+  // Toggle weak-letter practice on/off, then restart the CURRENT mode so the
+  // biased (or normal) curriculum takes effect now. Used by the button AND voice.
+  function togglePractice() {
+    unlockAudio();
+    if (typeof GameState === 'undefined') return;
+    const on = GameState.practiceLetters && GameState.practiceLetters.length;
+    if (on) {
+      GameState.setPracticeLetters(null);
+      log('[coach] practice off — normal curriculum');
+    } else {
+      const weak = (typeof Analytics !== 'undefined') ? Analytics.weakLetters() : [];
+      if (!weak.length) {
+        log('[coach] no weak letters yet (need >2 misses on one letter)');
+        safe('Speak', () => (typeof Speak !== 'undefined'
+          ? Speak.say('No weak letters yet. Keep playing.') : false));
+        render();
+        return;
+      }
+      GameState.setPracticeLetters(weak);
+      log(`[coach] practice on — targeting ${weak.join(', ')}`);
+      safe('Speak', () => (typeof Speak !== 'undefined'
+        ? Speak.say(`Practicing ${weak.join(', ')}.`) : false));
+    }
+    safe('Engine restart', () => (typeof Engine !== 'undefined' ? Engine.setMode(GameState.mode) : false));
+    render();
+  }
+
+  // Clear the miss profile (button AND voice).
+  function resetStats() {
+    if (typeof Analytics !== 'undefined') Analytics.reset();
+    exitPractice();
+    log('[coach] miss stats reset');
+    safe('Speak', () => (typeof Speak !== 'undefined' ? Speak.say('Stats reset.') : false));
+    render();
+  }
+
   // Coach panel: which letters you've missed + the weak ones Practice targets.
   function renderCoach() {
     if (typeof Analytics === 'undefined') return;
@@ -141,12 +177,6 @@
     }
   }
 
-  function testSound() {
-    const { ctxState, voices } = unlockAudio();
-    safe('Audio.win(test)', () => (typeof Audio !== 'undefined' ? Audio.win(1) : false)); // audible arpeggio
-    safe('Speak.test', () => (typeof Speak !== 'undefined' ? Speak.say('Audio test. One. Two. Three.') : false));
-    log(`[audio] test fired — context ${ctxState}, ${voices} TTS voices`);
-  }
 
   function render() {
     if (typeof GameState === 'undefined' || !GameState.content) return;
@@ -277,6 +307,9 @@
       typeof Voice !== 'undefined'
         ? Voice.onCommand((cmd) => {
             log(`[command] "${cmd}"`);
+            // coach commands are handled in the integration layer, not the engine
+            if (cmd === 'practice') { togglePractice(); return; }
+            if (cmd === 'reset stats') { resetStats(); return; }
             safe('Engine.handleCommand', () =>
               typeof Engine !== 'undefined' ? Engine.handleCommand(cmd) : false);
             render();
@@ -296,7 +329,6 @@
       if (overlay) overlay.style.display = 'none';
       render();
     });
-    $('test-btn').addEventListener('click', testSound);
     $('repeat-btn').addEventListener('click', () => sendCommand('repeat'));
 
     // On-screen command buttons — reliable control with no keyboard/voice needed.
@@ -309,38 +341,9 @@
       if (b) b.addEventListener('click', () => { exitPractice(); sendCommand(cmd); });
     }
 
-    // Practice weak letters: toggle targeting on/off, then restart the CURRENT
-    // mode so the biased (or normal) curriculum takes effect immediately.
-    const practiceBtn = $('practice-btn');
-    if (practiceBtn) practiceBtn.addEventListener('click', () => {
-      unlockAudio();
-      if (typeof GameState === 'undefined') return;
-      const on = GameState.practiceLetters && GameState.practiceLetters.length;
-      if (on) {
-        GameState.setPracticeLetters(null);
-        log('[coach] practice off — normal curriculum');
-      } else {
-        const weak = (typeof Analytics !== 'undefined') ? Analytics.weakLetters() : [];
-        if (!weak.length) {
-          log('[coach] no weak letters yet (need >2 misses on one letter)');
-          safe('Speak', () => (typeof Speak !== 'undefined'
-            ? Speak.say('No weak letters yet. Keep playing.') : false));
-          render();
-          return;
-        }
-        GameState.setPracticeLetters(weak);
-        log(`[coach] practice on — targeting ${weak.join(', ')}`);
-      }
-      safe('Engine restart', () => (typeof Engine !== 'undefined' ? Engine.setMode(GameState.mode) : false));
-      render();
-    });
-    const resetBtn = $('reset-stats-btn');
-    if (resetBtn) resetBtn.addEventListener('click', () => {
-      if (typeof Analytics !== 'undefined') Analytics.reset();
-      exitPractice();
-      log('[coach] miss stats reset');
-      render();
-    });
+    // Coach buttons share the exact logic the voice commands use.
+    if ($('practice-btn')) $('practice-btn').addEventListener('click', togglePractice);
+    if ($('reset-stats-btn')) $('reset-stats-btn').addEventListener('click', resetStats);
 
     render();
     setInterval(render, 250); // keep timers/scores fresh in race & rapid-fire
