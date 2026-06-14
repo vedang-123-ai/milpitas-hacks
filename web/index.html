@@ -105,6 +105,13 @@
       &nbsp;— hold <b>exactly</b> the needed dots to score.
     </p>
 
+    <!-- ── coach: which letters you miss, + targeted practice ──────────────── -->
+    <p class="legend" id="coach">
+      <b>coach</b> · <span id="coach-stats">no misses yet — play a round</span>
+      &nbsp;<button class="btn ghost" id="practice-btn">Practice weak letters</button>
+      <button class="btn ghost" id="reset-stats-btn">Reset stats</button>
+    </p>
+
     <!-- ── footer: help + signal log ───────────────────────────────────── -->
     <section class="console">
       <details class="logwrap">
@@ -129,6 +136,8 @@
 
   <!-- config first -->
   <script src="config.js"></script>
+  <!-- analytics: per-letter miss tracking + weak-letter practice targeting -->
+  <script src="analytics.js"></script>
   <!-- sensory layer (defines globals: Audio, Speak, Voice) -->
   <script src="audio/earcons.js"></script>
   <script src="audio/audio.js"></script>

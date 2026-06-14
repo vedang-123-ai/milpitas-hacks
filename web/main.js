@@ -94,6 +94,53 @@
     };
     Speak._teed = true;
   }
+
+  // Tee every wrong-dot buzz to Analytics, blaming it on the letter the player was
+  // forming. Wrapping Audio.buzz keeps this entirely in the integration layer — no
+  // game-logic file is touched. Misses are what Practice mode targets.
+  function installBuzzTracker() {
+    if (typeof Audio === 'undefined' || !Audio.buzz || Audio._tracked) return;
+    const original = Audio.buzz.bind(Audio);
+    Audio.buzz = (player) => {
+      try {
+        if (typeof GameState !== 'undefined' && typeof Analytics !== 'undefined') {
+          Analytics.recordMiss(GameState.currentLetterFor(player));
+        }
+      } catch (_) {}
+      return original(player);
+    };
+    Audio._tracked = true;
+  }
+
+  // Turn practice mode off (a normal mode/difficulty command leaves practice).
+  function exitPractice() {
+    if (typeof GameState !== 'undefined' && GameState.setPracticeLetters) GameState.setPracticeLetters(null);
+  }
+
+  // Coach panel: which letters you've missed + the weak ones Practice targets.
+  function renderCoach() {
+    if (typeof Analytics === 'undefined') return;
+    const statsEl = $('coach-stats');
+    if (statsEl) {
+      const summary = Analytics.summary();
+      if (!summary.length) {
+        statsEl.textContent = 'no misses yet — play a round';
+      } else {
+        const top = summary.slice(0, 8).map(([L, c]) => `${L}×${c}`).join('  ');
+        const weak = Analytics.weakLetters();
+        statsEl.innerHTML = top + (weak.length ? ` &nbsp;·&nbsp; weak: <b>${weak.join(' ')}</b>` : '');
+      }
+    }
+    const btn = $('practice-btn');
+    if (btn) {
+      const on = typeof GameState !== 'undefined' && GameState.practiceLetters && GameState.practiceLetters.length;
+      btn.classList.toggle('on', !!on);
+      btn.textContent = on
+        ? `Practicing ${GameState.practiceLetters.join(' ')} — tap for normal`
+        : 'Practice weak letters';
+    }
+  }
+
   function testSound() {
     const { ctxState, voices } = unlockAudio();
     safe('Audio.win(test)', () => (typeof Audio !== 'undefined' ? Audio.win(1) : false)); // audible arpeggio
@@ -151,6 +198,8 @@
     };
     if ($('read1')) $('read1').innerHTML = readout(1, t1);
     if ($('read2')) $('read2').innerHTML = readout(2, t2);
+
+    renderCoach();
   }
 
   // Load words.txt and split by length. medium = 2..7 letters, hard = 8+.
@@ -188,6 +237,7 @@
 
   async function boot() {
     installCaptionTee();
+    installBuzzTracker();
     buildGrid($('grid1'), 1);
     buildGrid($('grid2'), 2);
 
@@ -256,8 +306,41 @@
     };
     for (const [id, cmd] of Object.entries(CMD_BTNS)) {
       const b = $(id);
-      if (b) b.addEventListener('click', () => sendCommand(cmd));
+      if (b) b.addEventListener('click', () => { exitPractice(); sendCommand(cmd); });
     }
+
+    // Practice weak letters: toggle targeting on/off, then restart the CURRENT
+    // mode so the biased (or normal) curriculum takes effect immediately.
+    const practiceBtn = $('practice-btn');
+    if (practiceBtn) practiceBtn.addEventListener('click', () => {
+      unlockAudio();
+      if (typeof GameState === 'undefined') return;
+      const on = GameState.practiceLetters && GameState.practiceLetters.length;
+      if (on) {
+        GameState.setPracticeLetters(null);
+        log('[coach] practice off — normal curriculum');
+      } else {
+        const weak = (typeof Analytics !== 'undefined') ? Analytics.weakLetters() : [];
+        if (!weak.length) {
+          log('[coach] no weak letters yet (need >2 misses on one letter)');
+          safe('Speak', () => (typeof Speak !== 'undefined'
+            ? Speak.say('No weak letters yet. Keep playing.') : false));
+          render();
+          return;
+        }
+        GameState.setPracticeLetters(weak);
+        log(`[coach] practice on — targeting ${weak.join(', ')}`);
+      }
+      safe('Engine restart', () => (typeof Engine !== 'undefined' ? Engine.setMode(GameState.mode) : false));
+      render();
+    });
+    const resetBtn = $('reset-stats-btn');
+    if (resetBtn) resetBtn.addEventListener('click', () => {
+      if (typeof Analytics !== 'undefined') Analytics.reset();
+      exitPractice();
+      log('[coach] miss stats reset');
+      render();
+    });
 
     render();
     setInterval(render, 250); // keep timers/scores fresh in race & rapid-fire

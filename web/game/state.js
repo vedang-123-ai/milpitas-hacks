@@ -46,6 +46,7 @@
     // scores differ the match ends (a tie triggers sudden-death questions).
     race: { active: false, total: 0, asked: 0, over: false, winner: 0, sudden: false, dismissed: false },
     raceQuestionsOverride: null, // voice-set "best of N"; null = use difficulty default
+    practiceLetters: null,       // when set, the curriculum is biased to these weak letters
 
     init(content) {
       this.content = content;
@@ -126,6 +127,43 @@
         .filter((x) => x.dots.length);
     },
 
+    // The letter a player is currently trying to form (race uses their own pos,
+    // every other mode uses the shared letterIndex). Used by analytics to blame
+    // a wrong-dot miss on the right letter. "" when no letter is loaded.
+    currentLetterFor(player) {
+      const seq = this.letters;
+      if (!seq || !seq.length) return "";
+      const idx = this.race && this.race.active
+        ? (this.players[player] && this.players[player].pos) || 0
+        : this.letterIndex;
+      const cur = seq[idx];
+      return cur ? cur.letter : "";
+    },
+
+    // ── Practice targeting ────────────────────────────────────────────────────
+    // When practiceLetters is set, bias the curriculum toward those letters.
+    // Both helpers fall back to the full pool when practice is off OR when no
+    // candidate matches, so they NEVER break normal play or starve a difficulty.
+    setPracticeLetters(letters) {
+      this.practiceLetters = letters && letters.length ? letters.slice() : null;
+    },
+    practiceLetterPool(all) {
+      const p = this.practiceLetters;
+      if (!p || !p.length) return all;
+      const avail = p.filter((L) => this.content.letters[L]);
+      return avail.length ? avail : all;
+    },
+    practiceWordPool(list) {
+      const p = this.practiceLetters;
+      if (!p || !p.length || !list || !list.length) return list;
+      const set = new Set(p);
+      const hit = list.filter((w) => {
+        for (const ch of String(w)) if (set.has(ch)) return true;
+        return false;
+      });
+      return hit.length ? hit : list;
+    },
+
     // Build the next challenge. Difficulty decides the SHAPE:
     //   easy   -> a random single letter
     //   medium -> a random word (traced letter by letter)
@@ -139,7 +177,7 @@
       const soloWords = this.mode === "find-target";
 
       if (!soloWords || kind === "letter") {
-        const L = randItem(allLetters);
+        const L = randItem(this.practiceLetterPool(allLetters));
         return {
           type: "letter",
           label: L,
@@ -159,7 +197,7 @@
           bank && bank.length ? bank
           : this.content.words && this.content.words.length ? this.content.words
           : allLetters;
-        const word = randItem(list);
+        const word = randItem(this.practiceWordPool(list));
         const seq = this.wordToLetters(word);
         if (!seq.length) {
           const L = randItem(allLetters);
@@ -246,7 +284,7 @@
       const allLetters = Object.keys(this.content.letters);
       const tier = (this.content.difficulty && this.content.difficulty[this.difficulty]) || { kind: "letter" };
       const asLetter = () => {
-        const L = randItem(allLetters);
+        const L = randItem(this.practiceLetterPool(allLetters));
         return { type: "letter", label: L, letters: [{ letter: L, dots: this.content.letters[L].slice() }] };
       };
 
@@ -262,7 +300,7 @@
         : null;
       if (!list) return asLetter();
 
-      const word = randItem(list);
+      const word = randItem(this.practiceWordPool(list));
       const seq = this.wordToLetters(word);
       if (!seq.length) return asLetter();
       return { type: "word", label: word, letters: seq };
